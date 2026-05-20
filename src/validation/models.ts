@@ -299,7 +299,7 @@ export type ValidatorRequestModel =
 
 export type ValidatorConfigInput = SDKConfigInput | SDKConfigInputInit;
 export type InputDataPayload = JsonObject;
-export interface ValidationPayload {
+export interface ValidationPayload extends JsonObject {
   input_data: InputDataPayload;
   config_input: JsonObject;
 }
