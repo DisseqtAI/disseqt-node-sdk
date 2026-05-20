@@ -5,7 +5,7 @@ This file should be updated with every meaningful commit. Keep completed items c
 ## Commit Log Checklist
 
 - [x] 2026-05-20 - Scaffold production-oriented TypeScript SDK project structure.
-- [ ] Add shared HTTP transport, timeout handling, and SDK errors.
+- [x] 2026-05-20 - Add shared HTTP transport, timeout handling, raw/JSON response handling, and SDK errors.
 - [ ] Add validation domains, validator enums, and request model types from the Python SDK.
 - [ ] Implement generic validation client matching Python routes, headers, payloads, and error behavior.
 - [ ] Add typed validation convenience helpers for each domain.
