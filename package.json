@@ -1,0 +1,88 @@
+{
+  "name": "@disseqt/ai-sdk",
+  "version": "0.1.0",
+  "description": "Node.js SDK for Disseqt AI validation, prompt packs, and agentic tracing.",
+  "license": "Proprietary",
+  "author": "Disseqt AI Limited <support@disseqt.ai>",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./validation": {
+      "types": "./dist/validation/index.d.ts",
+      "import": "./dist/validation/index.js",
+      "require": "./dist/validation/index.cjs"
+    },
+    "./prompt-packs": {
+      "types": "./dist/prompt-packs/index.d.ts",
+      "import": "./dist/prompt-packs/index.js",
+      "require": "./dist/prompt-packs/index.cjs"
+    },
+    "./agentic": {
+      "types": "./dist/agentic/index.d.ts",
+      "import": "./dist/agentic/index.js",
+      "require": "./dist/agentic/index.cjs"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18.18.0"
+  },
+  "scripts": {
+    "build": "tsup",
+    "clean": "rimraf dist coverage",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "prepack": "npm run clean && npm run lint && npm run typecheck && npm run test && npm run build",
+    "pack:dry-run": "npm pack --dry-run"
+  },
+  "keywords": [
+    "ai",
+    "llm",
+    "validation",
+    "sdk",
+    "guardrails",
+    "observability",
+    "agentic",
+    "tracing",
+    "disseqt"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DisseqtAI/disseqt-node-sdk.git"
+  },
+  "bugs": {
+    "url": "https://github.com/DisseqtAI/disseqt-node-sdk/issues"
+  },
+  "homepage": "https://docs.disseqt.ai",
+  "publishConfig": {
+    "access": "public"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@typescript-eslint/eslint-plugin": "^8.18.1",
+    "@typescript-eslint/parser": "^8.18.1",
+    "eslint": "^9.17.0",
+    "eslint-config-prettier": "^9.1.0",
+    "prettier": "^3.4.2",
+    "rimraf": "^6.0.1",
+    "tsup": "^8.3.5",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}
