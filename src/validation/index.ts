@@ -7,3 +7,6 @@ export interface ValidationClientConfig {
   baseUrl?: string;
   timeoutMs?: number;
 }
+
+export * from './enums.js';
+export * from './models.js';
