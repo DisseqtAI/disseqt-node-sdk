@@ -12,4 +12,5 @@ export * from './enums.js';
 export * from './models.js';
 export * from './routes.js';
 export * from './validators.js';
+export * from './helpers.js';
 export * from './client.js';

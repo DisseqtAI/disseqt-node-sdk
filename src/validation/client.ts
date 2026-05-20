@@ -1,5 +1,14 @@
 import { DisseqtHttpTransport, type DisseqtHttpTransportConfig } from '../http/index.js';
 import type { JsonObject } from '../http/types.js';
+import {
+  AgenticBehaviorHelpers,
+  CompositeHelpers,
+  InputValidationHelpers,
+  McpSecurityHelpers,
+  OutputValidationHelpers,
+  RagGroundingHelpers,
+  ThemesClassifierHelpers,
+} from './helpers.js';
 import { buildValidatorUrl } from './routes.js';
 import { type GenericValidationRequest, type Validatable, toValidatable } from './validators.js';
 
@@ -15,6 +24,13 @@ export class Client {
   readonly apiKey: string;
   readonly baseUrl: string;
   readonly timeoutMs: number;
+  readonly input: InputValidationHelpers;
+  readonly output: OutputValidationHelpers;
+  readonly rag: RagGroundingHelpers;
+  readonly agentic: AgenticBehaviorHelpers;
+  readonly mcp: McpSecurityHelpers;
+  readonly themes: ThemesClassifierHelpers;
+  readonly composite: CompositeHelpers;
 
   private readonly transport: DisseqtHttpTransport;
 
@@ -32,6 +48,13 @@ export class Client {
       transportConfig.fetch = config.fetch;
     }
     this.transport = new DisseqtHttpTransport(transportConfig);
+    this.input = new InputValidationHelpers(this);
+    this.output = new OutputValidationHelpers(this);
+    this.rag = new RagGroundingHelpers(this);
+    this.agentic = new AgenticBehaviorHelpers(this);
+    this.mcp = new McpSecurityHelpers(this);
+    this.themes = new ThemesClassifierHelpers(this);
+    this.composite = new CompositeHelpers(this);
   }
 
   _buildHeaders(): Record<string, string> {
