@@ -16,13 +16,13 @@ This file should be updated with every meaningful commit. Keep completed items c
 - [x] 2026-05-21 - Add agentic client, batching, flush, shutdown, and retry behavior.
 - [x] 2026-05-21 - Add agentic helper APIs.
 - [x] 2026-05-21 - Add agentic unit tests.
-- [ ] Add examples for validation, composite score, prompt packs, and agentic tracing.
-- [ ] Complete README usage docs and package publishing metadata.
+- [x] 2026-05-21 - Add examples for validation, composite score, prompt packs, and agentic tracing.
+- [x] 2026-05-21 - Complete README usage docs and package publishing metadata.
 - [ ] Run release checks: lint, typecheck, test, build, and npm pack dry run.
 
 ## Production Readiness Gates
 
-- [ ] Public APIs are typed and documented.
+- [x] Public APIs are typed and documented.
 - [x] Network behavior is covered with deterministic unit tests.
 - [x] No live API calls run in default tests.
 - [ ] Package exports work for ESM and CommonJS consumers.
