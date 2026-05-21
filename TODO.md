@@ -14,8 +14,8 @@ This file should be updated with every meaningful commit. Keep completed items c
 - [x] 2026-05-21 - Add Prompt Packs unit tests.
 - [x] 2026-05-21 - Add agentic trace/span core models and semantic attributes.
 - [x] 2026-05-21 - Add agentic client, batching, flush, shutdown, and retry behavior.
-- [ ] Add agentic helper APIs.
-- [ ] Add agentic unit tests.
+- [x] 2026-05-21 - Add agentic helper APIs.
+- [x] 2026-05-21 - Add agentic unit tests.
 - [ ] Add examples for validation, composite score, prompt packs, and agentic tracing.
 - [ ] Complete README usage docs and package publishing metadata.
 - [ ] Run release checks: lint, typecheck, test, build, and npm pack dry run.

@@ -16,6 +16,7 @@ export * from './context.js';
 export * from './buffer.js';
 export * from './client.js';
 export * from './enums.js';
+export * from './helpers.js';
 export * from './models.js';
 export * from './semantics.js';
 export * from './span.js';
