@@ -11,3 +11,11 @@ export interface AgenticClientConfig {
   flushIntervalMs?: number;
   maxRetries?: number;
 }
+
+export * from './context.js';
+export * from './enums.js';
+export * from './models.js';
+export * from './semantics.js';
+export * from './span.js';
+export * from './trace.js';
+export * from './utils.js';
