@@ -18,19 +18,19 @@ This file should be updated with every meaningful commit. Keep completed items c
 - [x] 2026-05-21 - Add agentic unit tests.
 - [x] 2026-05-21 - Add examples for validation, composite score, prompt packs, and agentic tracing.
 - [x] 2026-05-21 - Complete README usage docs and package publishing metadata.
-- [ ] Run release checks: lint, typecheck, test, build, and npm pack dry run.
+- [x] 2026-05-21 - Run release checks: lint, typecheck, test, build, and npm pack dry run.
 
 ## Production Readiness Gates
 
 - [x] Public APIs are typed and documented.
 - [x] Network behavior is covered with deterministic unit tests.
 - [x] No live API calls run in default tests.
-- [ ] Package exports work for ESM and CommonJS consumers.
+- [x] Package exports work for ESM and CommonJS consumers.
 - [x] Errors expose status code, response body preview, and request context where useful.
 - [x] Timeouts use AbortController and clean up timers.
 - [x] Source maps and declaration files are emitted.
 - [ ] README examples compile.
-- [ ] npm package contents verified with `npm pack --dry-run`.
+- [x] npm package contents verified with `npm pack --dry-run`.
 
 ## Python SDK Behavior To Mirror
 
