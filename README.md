@@ -42,6 +42,25 @@ DISSEQT_AGENTIC_ENDPOINT=https://api.disseqt.ai/agentic-monitoring/api/v1/traces
 
 The smoke script prints one-line `[PASS]` / `[FAIL]` entries and exits non-zero if any validator or span check fails.
 
+## Run All Validators Locally
+
+Create a `.env` file or export credentials:
+
+```bash
+DISSEQT_API_KEY=...
+DISSEQT_PROJECT_ID=...
+DISSEQT_VALIDATION_BASE_URL=https://production-monitoring-eu.disseqt.ai
+DISSEQT_TIMEOUT_SECONDS=30
+```
+
+Run the TypeScript validator walkthrough:
+
+```bash
+npm run validators:all
+```
+
+The script at `scripts/run-all-validators.ts` mirrors the Python validation notebook, runs all 67 validator cases, logs one line per pass/fail, continues after errors, and exits non-zero when any validator fails.
+
 ## Validation
 
 ```ts
@@ -93,7 +112,9 @@ const pack = await api.generatePromptPack({
   author: 'AI Generator',
   domain: 'Security',
   generationType: 'AI',
-  categories: [{ mainCategory: 'reliability_and_safety', subcategory: 'hate_speech', promptsCount: 5 }],
+  categories: [
+    { mainCategory: 'reliability_and_safety', subcategory: 'hate_speech', promptsCount: 5 },
+  ],
 });
 ```
 

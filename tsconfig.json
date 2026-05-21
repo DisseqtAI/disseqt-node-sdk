@@ -1,10 +1,7 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "lib": [
-      "ES2022",
-      "DOM"
-    ],
+    "lib": ["ES2022", "DOM"],
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "declaration": true,
@@ -24,14 +21,6 @@
     "resolveJsonModule": true,
     "outDir": "dist"
   },
-  "include": [
-    "src",
-    "tests",
-    "examples"
-  ],
-  "exclude": [
-    "dist",
-    "node_modules",
-    "coverage"
-  ]
+  "include": ["src", "tests", "examples", "scripts"],
+  "exclude": ["dist", "node_modules", "coverage"]
 }

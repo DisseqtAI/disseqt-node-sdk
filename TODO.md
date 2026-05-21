@@ -20,6 +20,7 @@ This file should be updated with every meaningful commit. Keep completed items c
 - [x] 2026-05-21 - Complete README usage docs and package publishing metadata.
 - [x] 2026-05-21 - Run release checks: lint, typecheck, test, build, and npm pack dry run.
 - [x] 2026-05-21 - Add all-validator and all-span smoke test script with one-line error logs.
+- [x] 2026-05-21 - Add local TypeScript runner for all live validators based on the Python validation notebook.
 
 ## Production Readiness Gates
 
