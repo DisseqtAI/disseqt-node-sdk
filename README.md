@@ -19,6 +19,29 @@ npm run test
 npm run build
 ```
 
+## Smoke Test
+
+Run every validator slug and every agentic span kind in mocked mode:
+
+```bash
+npm run smoke:all
+```
+
+Run the same script against live services:
+
+```bash
+DISSEQT_API_KEY=... DISSEQT_PROJECT_ID=... npm run smoke:all:live
+```
+
+Optional live overrides:
+
+```bash
+DISSEQT_VALIDATION_BASE_URL=https://production-monitoring-eu.disseqt.ai
+DISSEQT_AGENTIC_ENDPOINT=https://api.disseqt.ai/agentic-monitoring/api/v1/traces
+```
+
+The smoke script prints one-line `[PASS]` / `[FAIL]` entries and exits non-zero if any validator or span check fails.
+
 ## Validation
 
 ```ts
