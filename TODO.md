@@ -9,9 +9,9 @@ This file should be updated with every meaningful commit. Keep completed items c
 - [x] 2026-05-20 - Add validation domains, validator enums, and request model types from the Python SDK.
 - [x] 2026-05-20 - Implement generic validation client matching Python routes, headers, payloads, and error behavior.
 - [x] 2026-05-20 - Add typed validation convenience helpers for each domain.
-- [ ] Add validation unit tests with mocked fetch.
-- [ ] Implement Prompt Packs REST client.
-- [ ] Add Prompt Packs unit tests.
+- [x] 2026-05-21 - Add validation unit tests with mocked fetch.
+- [x] 2026-05-21 - Implement Prompt Packs REST client.
+- [x] 2026-05-21 - Add Prompt Packs unit tests.
 - [ ] Add agentic trace/span core models and semantic attributes.
 - [ ] Add agentic client, batching, flush, shutdown, and retry behavior.
 - [ ] Add agentic helper APIs.
@@ -23,12 +23,12 @@ This file should be updated with every meaningful commit. Keep completed items c
 ## Production Readiness Gates
 
 - [ ] Public APIs are typed and documented.
-- [ ] Network behavior is covered with deterministic unit tests.
-- [ ] No live API calls run in default tests.
+- [x] Network behavior is covered with deterministic unit tests.
+- [x] No live API calls run in default tests.
 - [ ] Package exports work for ESM and CommonJS consumers.
-- [ ] Errors expose status code, response body preview, and request context where useful.
-- [ ] Timeouts use AbortController and clean up timers.
-- [ ] Source maps and declaration files are emitted.
+- [x] Errors expose status code, response body preview, and request context where useful.
+- [x] Timeouts use AbortController and clean up timers.
+- [x] Source maps and declaration files are emitted.
 - [ ] README examples compile.
 - [ ] npm package contents verified with `npm pack --dry-run`.
 

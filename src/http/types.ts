@@ -24,6 +24,7 @@ export interface DisseqtRequestOptions {
   params?: QueryParams;
   headers?: Record<string, string>;
   includeContentType?: boolean;
+  errorMessage?: string;
   signal?: AbortSignal;
 }
 

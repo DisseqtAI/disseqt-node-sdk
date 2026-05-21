@@ -111,7 +111,7 @@ export class DisseqtHttpTransport {
       if (!response.ok) {
         throw new DisseqtHttpError(
           response.status,
-          'API request failed',
+          options.errorMessage ?? 'API request failed',
           text.slice(0, ERROR_BODY_PREVIEW_LENGTH),
           { method: options.method, url },
         );
