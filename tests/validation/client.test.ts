@@ -216,9 +216,11 @@ describe('Client', () => {
       'https://api.test.com/api/v1/sdk/validators/themes-classifier/classify',
     );
     expect(JSON.parse(String(fetcher.mock.calls[0]?.[1]?.body))).toEqual({
-      text: 'This is about security testing.',
-      return_subthemes: false,
-      max_themes: 5,
+      input_data: {
+        text: 'This is about security testing.',
+        return_subthemes: false,
+        max_themes: 5,
+      },
     });
   });
 

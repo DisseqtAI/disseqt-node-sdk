@@ -146,7 +146,7 @@ export class ClassifyValidator implements Validatable {
   }
 
   toPayload(): JsonObject {
-    return this.data.toInputData();
+    return { input_data: this.data.toInputData() };
   }
 }
 

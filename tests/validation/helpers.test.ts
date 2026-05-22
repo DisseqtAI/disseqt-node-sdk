@@ -107,6 +107,14 @@ describe('typed validation helpers', () => {
       'https://api.test.com/api/v1/sdk/validators/themes-classifier/classify',
       'https://api.test.com/api/v1/validators/composite/evaluate',
     ]);
+    const themesInit = fetcher.mock.calls[0]?.[1] as RequestInit | undefined;
+    expect(JSON.parse(String(themesInit?.body))).toEqual({
+      input_data: {
+        text: 'Security testing notes',
+        return_subthemes: true,
+        max_themes: 3,
+      },
+    });
     expect(lastJsonBody(fetcher)).toEqual({
       input_data: {
         llm_input_query: 'Q',
