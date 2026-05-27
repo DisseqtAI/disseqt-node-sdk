@@ -12,7 +12,7 @@ import {
 import { buildValidatorUrl } from './routes.js';
 import { type GenericValidationRequest, type Validatable, toValidatable } from './validators.js';
 
-const DEFAULT_BASE_URL = 'https://production-monitoring-eu.disseqt.ai';
+const DEFAULT_BASE_URL = 'https://api.disseqt.ai/realtime-validations';
 
 export interface ClientConfig extends DisseqtHttpTransportConfig {
   baseUrl?: string;

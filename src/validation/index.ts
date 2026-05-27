@@ -1,4 +1,4 @@
-export const VALIDATION_DEFAULT_BASE_URL = 'https://production-monitoring-eu.disseqt.ai';
+export const VALIDATION_DEFAULT_BASE_URL = 'https://api.disseqt.ai/realtime-validations';
 export const VALIDATION_PATH_TEMPLATE = '/api/v1/sdk/validators/{domain}/{validator}';
 
 export interface ValidationClientConfig {

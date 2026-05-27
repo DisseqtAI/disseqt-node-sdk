@@ -36,7 +36,7 @@ DISSEQT_API_KEY=... DISSEQT_PROJECT_ID=... npm run smoke:all:live
 Optional live overrides:
 
 ```bash
-DISSEQT_VALIDATION_BASE_URL=https://production-monitoring-eu.disseqt.ai
+DISSEQT_VALIDATION_BASE_URL=https://api.disseqt.ai/realtime-validations
 DISSEQT_AGENTIC_ENDPOINT=https://api.disseqt.ai/agentic-monitoring/api/v1/traces
 ```
 
@@ -49,7 +49,7 @@ Create a `.env` file or export credentials:
 ```bash
 DISSEQT_API_KEY=...
 DISSEQT_PROJECT_ID=...
-DISSEQT_VALIDATION_BASE_URL=https://production-monitoring-eu.disseqt.ai
+DISSEQT_VALIDATION_BASE_URL=https://api.disseqt.ai/realtime-validations
 DISSEQT_TIMEOUT_SECONDS=30
 ```
 
@@ -155,7 +155,7 @@ await agentic.shutdown();
 The Node SDK mirrors the Python SDK wire behavior:
 
 - Headers: `X-API-Key`, `X-Project-Id`, and `Content-Type: application/json`
-- Validation default base URL: `https://production-monitoring-eu.disseqt.ai`
+- Validation default base URL: `https://api.disseqt.ai/realtime-validations`
 - Validation path: `/api/v1/sdk/validators/{domain}/{validator}`
 - Composite path: `/api/v1/validators/composite/evaluate`
 - Prompt Packs default base URL: `http://localhost:8000`
