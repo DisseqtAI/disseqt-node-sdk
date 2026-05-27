@@ -338,9 +338,7 @@ describe('Prompt Packs errors', () => {
       responseBody: 'Bad Request',
     });
 
-    await expect(
-      invalidJsonClient.list_runs('pack-abc-123'),
-    ).rejects.toMatchObject({
+    await expect(invalidJsonClient.list_runs('pack-abc-123')).rejects.toMatchObject({
       name: 'DisseqtJsonError',
       responseText: 'Not JSON',
     });

@@ -9,6 +9,7 @@ export default [
       'dist/**',
       'coverage/**',
       'node_modules/**',
+      '.claude/**',
       'eslint.config.js',
       'tsup.config.ts',
       'vitest.config.ts',

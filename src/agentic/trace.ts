@@ -62,7 +62,12 @@ export class DisseqtTrace {
   startSpan(
     name: string,
     kind: SpanKindInput,
-    options: { spanId?: string; span_id?: string; parentSpanId?: string | null; parent_span_id?: string | null } = {},
+    options: {
+      spanId?: string;
+      span_id?: string;
+      parentSpanId?: string | null;
+      parent_span_id?: string | null;
+    } = {},
   ): DisseqtSpan {
     if (this.isEnded) {
       throw new RuntimeError('Cannot start a new span on an ended trace.');

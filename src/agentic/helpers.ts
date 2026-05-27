@@ -26,7 +26,7 @@ export function set_client(client: DisseqtAgenticClient | null): void {
 export function getCurrentClient(): DisseqtAgenticClient {
   if (globalClient === null) {
     throw new RuntimeError(
-      "SDK not initialized. Call setClient(client) or pass a DisseqtAgenticClient instance.",
+      'SDK not initialized. Call setClient(client) or pass a DisseqtAgenticClient instance.',
     );
   }
   return globalClient;
@@ -152,7 +152,12 @@ export function traceLlmCall(trace: DisseqtTrace, options: TraceLlmCallOptions):
 
   const inputTokens = options.inputTokens ?? options.input_tokens;
   const outputTokens = options.outputTokens ?? options.output_tokens;
-  if (inputTokens !== undefined && inputTokens !== null && outputTokens !== undefined && outputTokens !== null) {
+  if (
+    inputTokens !== undefined &&
+    inputTokens !== null &&
+    outputTokens !== undefined &&
+    outputTokens !== null
+  ) {
     span.setTokenUsage(inputTokens, outputTokens);
   }
   if (options.temperature !== undefined && options.temperature !== null) {
@@ -180,7 +185,10 @@ export interface TraceAgentActionOptions {
   attributes?: Record<string, SpanAttributeValue>;
 }
 
-export function traceAgentAction(trace: DisseqtTrace, options: TraceAgentActionOptions): DisseqtSpan {
+export function traceAgentAction(
+  trace: DisseqtTrace,
+  options: TraceAgentActionOptions,
+): DisseqtSpan {
   const agentName = options.agentName ?? options.agent_name;
   if (agentName === undefined) {
     throw new ValueError('agent_name is required');

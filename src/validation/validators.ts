@@ -48,9 +48,7 @@ export abstract class BaseValidator<TData> implements Validatable {
     this.slug = input.slug;
     this.data = input.data;
     this.config =
-      input.config instanceof SDKConfigInput
-        ? input.config
-        : new SDKConfigInput(input.config);
+      input.config instanceof SDKConfigInput ? input.config : new SDKConfigInput(input.config);
     this.pathTemplate = input.pathTemplate ?? DEFAULT_VALIDATOR_PATH_TEMPLATE;
   }
 
@@ -125,9 +123,7 @@ export class McpSecurityValidator extends BaseValidator<McpSecurityRequest> {
     super({
       ...input,
       data:
-        input.data instanceof McpSecurityRequest
-          ? input.data
-          : new McpSecurityRequest(input.data),
+        input.data instanceof McpSecurityRequest ? input.data : new McpSecurityRequest(input.data),
     });
   }
 }

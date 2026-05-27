@@ -16,13 +16,12 @@ import {
   OutputValidationRequest,
   RagGrounding,
   RagGroundingRequest,
-  ThemesClassifier,
-  ThemesClassifierRequest,
   ValidatorDomain,
   type ClientConfig,
   type GenericValidationRequest,
   type JsonObject,
   type SDKConfigInputInit,
+  type ThemesClassifierRequest,
 } from '../src/index.js';
 
 type ValidatorData =
@@ -912,19 +911,6 @@ function mcpSecurityCases(): ValidatorCase[] {
       config: config(0.25, ['Safe', 'Medium Risk', 'High Risk'], [0.25, 0.5]),
     },
   ];
-}
-
-function themesClassifierCase(): ValidatorCase {
-  return {
-    label: 'Themes 1/1 Classify',
-    domain: ValidatorDomain.ThemesClassifier,
-    slug: ThemesClassifier.Classify,
-    data: new ThemesClassifierRequest({
-      text: 'This text discusses AI safety, privacy, reliability, and evaluation for production systems.',
-      returnSubthemes: true,
-      maxThemes: 3,
-    }),
-  };
 }
 
 function compositeScoreCase(): ValidatorCase {

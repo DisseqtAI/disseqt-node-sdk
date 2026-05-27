@@ -303,7 +303,9 @@ async function runSpanSmoke(fetcher, mockCalls) {
 async function main() {
   const mockCalls = [];
   const fetcher = isLive ? undefined : makeMockFetch(mockCalls);
-  info(`mode=${isLive ? 'live' : 'mock'} validators=${validationCases().length} spans=${enumValues(SpanKind).length + 1}`);
+  info(
+    `mode=${isLive ? 'live' : 'mock'} validators=${validationCases().length} spans=${enumValues(SpanKind).length + 1}`,
+  );
 
   try {
     await runValidationSmoke(fetcher);

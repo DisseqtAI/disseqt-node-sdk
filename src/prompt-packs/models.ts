@@ -240,8 +240,7 @@ export class PromptPackOutputValidationRequest {
 
   constructor(input: PromptPackOutputValidationRequestInit) {
     const runName =
-      input.promptPackOutputValidationRunName ??
-      input.prompt_pack_output_validation_run_name;
+      input.promptPackOutputValidationRunName ?? input.prompt_pack_output_validation_run_name;
     const metricEvaluations = input.metricEvaluations ?? input.metric_evaluations;
 
     if (runName === undefined) {
@@ -342,9 +341,7 @@ export type PaginationInput = PaginationParams | PaginationParamsInit;
 export function toGeneratePromptPackRequest(
   input: GeneratePromptPackInput,
 ): GeneratePromptPackRequest {
-  return input instanceof GeneratePromptPackRequest
-    ? input
-    : new GeneratePromptPackRequest(input);
+  return input instanceof GeneratePromptPackRequest ? input : new GeneratePromptPackRequest(input);
 }
 
 export function toCreateRunRequest(input: CreateRunInput): CreateRunRequest {

@@ -58,7 +58,11 @@ export class DisseqtSpan {
     let parentSpanId = input.parentSpanId ?? input.parent_span_id ?? null;
     let parentSpanContext: DisseqtSpan | null = null;
     const currentSpan = getCurrentSpan();
-    if (parentSpanId === null && currentSpan !== null && String(currentSpan.traceId) === String(traceId)) {
+    if (
+      parentSpanId === null &&
+      currentSpan !== null &&
+      String(currentSpan.traceId) === String(traceId)
+    ) {
       parentSpanId = currentSpan.spanId;
       parentSpanContext = currentSpan;
     }
@@ -80,7 +84,11 @@ export class DisseqtSpan {
     setCurrentSpan(this);
   }
 
-  setAgentInfo(agentName?: string | null, agentId?: string | null, agentVersion?: string | null): this {
+  setAgentInfo(
+    agentName?: string | null,
+    agentId?: string | null,
+    agentVersion?: string | null,
+  ): this {
     if (agentName) {
       this.attributes[AgenticAttributes.AgentName] = agentName;
     }
@@ -93,7 +101,11 @@ export class DisseqtSpan {
     return this;
   }
 
-  set_agent_info(agentName?: string | null, agentId?: string | null, agentVersion?: string | null): this {
+  set_agent_info(
+    agentName?: string | null,
+    agentId?: string | null,
+    agentVersion?: string | null,
+  ): this {
     return this.setAgentInfo(agentName, agentId, agentVersion);
   }
 
@@ -139,10 +151,7 @@ export class DisseqtSpan {
     return this.setTokenUsage(inputTokens, outputTokens);
   }
 
-  setMessages(
-    inputMessages?: JsonObject[] | null,
-    outputMessages?: JsonObject[] | null,
-  ): this {
+  setMessages(inputMessages?: JsonObject[] | null, outputMessages?: JsonObject[] | null): this {
     if (inputMessages !== undefined && inputMessages !== null && inputMessages.length > 0) {
       this.attributes[AgenticAttributes.InputMessages] = inputMessages;
     }
@@ -231,7 +240,8 @@ export class DisseqtSpan {
       service_version: this.serviceVersion,
       environment: this.environment,
       dt: new Date(),
-      attributes_json: Object.keys(this.attributes).length > 0 ? JSON.stringify(this.attributes) : '{}',
+      attributes_json:
+        Object.keys(this.attributes).length > 0 ? JSON.stringify(this.attributes) : '{}',
       resource_attributes_json: '{}',
       events_json: '[]',
       ingestion_time: new Date(),

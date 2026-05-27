@@ -35,7 +35,8 @@ export class DisseqtAPIClient {
     this.projectId = config.projectId;
     this.apiKey = config.apiKey;
     this.baseUrl = (config.baseUrl ?? PROMPT_PACKS_DEFAULT_BASE_URL).replace(/\/+$/, '');
-    this.timeoutMs = config.timeoutMs ?? (config.timeout === undefined ? 30_000 : config.timeout * 1000);
+    this.timeoutMs =
+      config.timeoutMs ?? (config.timeout === undefined ? 30_000 : config.timeout * 1000);
 
     const transportConfig: DisseqtHttpTransportConfig = {
       apiKey: this.apiKey,
@@ -170,7 +171,11 @@ export class DisseqtAPIClient {
 
   async get_run(
     runId: string,
-    options: { includeOutputs?: boolean; include_outputs?: boolean; pagination?: PaginationInput | null } = {},
+    options: {
+      includeOutputs?: boolean;
+      include_outputs?: boolean;
+      pagination?: PaginationInput | null;
+    } = {},
   ): Promise<JsonObject> {
     const includeOutputs = options.includeOutputs ?? options.include_outputs ?? true;
     return this._request('GET', `/runs/${runId}`, {
@@ -183,7 +188,11 @@ export class DisseqtAPIClient {
 
   getRun(
     runId: string,
-    options: { includeOutputs?: boolean; include_outputs?: boolean; pagination?: PaginationInput | null } = {},
+    options: {
+      includeOutputs?: boolean;
+      include_outputs?: boolean;
+      pagination?: PaginationInput | null;
+    } = {},
   ): Promise<JsonObject> {
     return this.get_run(runId, options);
   }

@@ -147,7 +147,9 @@ describe('span helper functions', () => {
     expect(agentSpan.kind).toBe('AGENT_EXEC');
     expect(agentSpan.attributes[AgenticAttributes.AgentName]).toBe('assistant');
     expect(agentSpan.attributes[AgenticAttributes.AgentId]).toBe('agent_001');
-    expect(agentSpan.attributes[AgenticAttributes.OperationName]).toBe(AgenticOperation.InvokeAgent);
+    expect(agentSpan.attributes[AgenticAttributes.OperationName]).toBe(
+      AgenticOperation.InvokeAgent,
+    );
     expect(agentSpan.attributes.custom_key).toBe('value');
 
     expect(toolSpan.kind).toBe('TOOL_EXEC');
@@ -164,15 +166,11 @@ describe('traceFunction', () => {
   it('wraps successful async functions and sends traces', async () => {
     const client = createClient();
     const sendSpy = vi.spyOn(client, 'sendTrace');
-    const wrapped = traceFunction(
-      client,
-      async (name: string) => `hello ${name}`,
-      {
-        name: 'my_function',
-        kind: SpanKind.AgentExec,
-        attributes: { agent_name: 'test_agent' },
-      },
-    );
+    const wrapped = traceFunction(client, async (name: string) => `hello ${name}`, {
+      name: 'my_function',
+      kind: SpanKind.AgentExec,
+      attributes: { agent_name: 'test_agent' },
+    });
 
     await expect(wrapped('world')).resolves.toBe('hello world');
     expect(sendSpy).toHaveBeenCalledOnce();

@@ -35,7 +35,11 @@ describe('typed validation helpers', () => {
     const { client, fetcher } = createClient();
 
     await client.input.toxicity({ prompt: 'hello' }, { threshold: 0.5 });
-    await client.input.run(InputValidation.PromptInjection, { prompt: 'ignore rules' }, { threshold: 0.9 });
+    await client.input.run(
+      InputValidation.PromptInjection,
+      { prompt: 'ignore rules' },
+      { threshold: 0.9 },
+    );
 
     expect(fetcher).toHaveBeenCalledTimes(2);
     expect(lastUrl(fetcher)).toBe(
@@ -62,7 +66,11 @@ describe('typed validation helpers', () => {
       },
       { threshold: 0.7 },
     );
-    await client.output.run(OutputValidation.BleuScore, { context: 'A', response: 'B' }, { threshold: 0.5 });
+    await client.output.run(
+      OutputValidation.BleuScore,
+      { context: 'A', response: 'B' },
+      { threshold: 0.5 },
+    );
     await client.rag.run(
       RagGrounding.ContextRelevance,
       { prompt: 'What is AI?', context: 'AI is artificial intelligence.' },

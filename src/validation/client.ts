@@ -38,7 +38,8 @@ export class Client {
     this.projectId = config.projectId;
     this.apiKey = config.apiKey;
     this.baseUrl = config.baseUrl ?? DEFAULT_BASE_URL;
-    this.timeoutMs = config.timeoutMs ?? (config.timeout === undefined ? 30_000 : config.timeout * 1000);
+    this.timeoutMs =
+      config.timeoutMs ?? (config.timeout === undefined ? 30_000 : config.timeout * 1000);
     const transportConfig: DisseqtHttpTransportConfig = {
       apiKey: this.apiKey,
       projectId: this.projectId,

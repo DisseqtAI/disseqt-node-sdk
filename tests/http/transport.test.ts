@@ -81,9 +81,7 @@ describe('DisseqtHttpTransport', () => {
 
     const firstCall = fetcher.mock.calls[0];
     expect(firstCall).toBeDefined();
-    expect(firstCall?.[0]).toBe(
-      'https://example.test/items?page=2&limit=10&archived=false',
-    );
+    expect(firstCall?.[0]).toBe('https://example.test/items?page=2&limit=10&archived=false');
   });
 
   it('returns deleted status for 204 responses', async () => {

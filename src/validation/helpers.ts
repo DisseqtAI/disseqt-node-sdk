@@ -49,7 +49,11 @@ export type CompositeScoreData = CompositeScoreRequest | CompositeScoreRequestIn
 export class InputValidationHelpers {
   constructor(private readonly executor: ValidationExecutor) {}
 
-  run(slug: InputValidation, data: InputValidationData, config: ValidatorConfigInput): Promise<JsonObject> {
+  run(
+    slug: InputValidation,
+    data: InputValidationData,
+    config: ValidatorConfigInput,
+  ): Promise<JsonObject> {
     return this.executor.validate(new InputValidator({ slug, data, config }));
   }
 
@@ -117,11 +121,18 @@ export class InputValidationHelpers {
 export class OutputValidationHelpers {
   constructor(private readonly executor: ValidationExecutor) {}
 
-  run(slug: OutputValidation, data: OutputValidationData, config: ValidatorConfigInput): Promise<JsonObject> {
+  run(
+    slug: OutputValidation,
+    data: OutputValidationData,
+    config: ValidatorConfigInput,
+  ): Promise<JsonObject> {
     return this.executor.validate(new OutputValidator({ slug, data, config }));
   }
 
-  factualConsistency(data: OutputValidationData, config: ValidatorConfigInput): Promise<JsonObject> {
+  factualConsistency(
+    data: OutputValidationData,
+    config: ValidatorConfigInput,
+  ): Promise<JsonObject> {
     return this.run(OutputValidation.FactualConsistency, data, config);
   }
 
@@ -129,11 +140,17 @@ export class OutputValidationHelpers {
     return this.run(OutputValidation.AnswerRelevance, data, config);
   }
 
-  conceptualSimilarity(data: OutputValidationData, config: ValidatorConfigInput): Promise<JsonObject> {
+  conceptualSimilarity(
+    data: OutputValidationData,
+    config: ValidatorConfigInput,
+  ): Promise<JsonObject> {
     return this.run(OutputValidation.ConceptualSimilarity, data, config);
   }
 
-  grammarCorrectness(data: OutputValidationData, config: ValidatorConfigInput): Promise<JsonObject> {
+  grammarCorrectness(
+    data: OutputValidationData,
+    config: ValidatorConfigInput,
+  ): Promise<JsonObject> {
     return this.run(OutputValidation.GrammarCorrectness, data, config);
   }
 
@@ -161,7 +178,10 @@ export class OutputValidationHelpers {
     return this.run(OutputValidation.Diversity, data, config);
   }
 
-  narrativeContinuity(data: OutputValidationData, config: ValidatorConfigInput): Promise<JsonObject> {
+  narrativeContinuity(
+    data: OutputValidationData,
+    config: ValidatorConfigInput,
+  ): Promise<JsonObject> {
     return this.run(OutputValidation.NarrativeContinuity, data, config);
   }
 
@@ -253,7 +273,11 @@ export class OutputValidationHelpers {
 export class RagGroundingHelpers {
   constructor(private readonly executor: ValidationExecutor) {}
 
-  run(slug: RagGrounding, data: RagGroundingData, config: ValidatorConfigInput): Promise<JsonObject> {
+  run(
+    slug: RagGrounding,
+    data: RagGroundingData,
+    config: ValidatorConfigInput,
+  ): Promise<JsonObject> {
     return this.executor.validate(new RagGroundingValidator({ slug, data, config }));
   }
 
