@@ -503,10 +503,6 @@ scripts/         # Smoke runners
 tests/           # Vitest specs (one per source folder)
 ```
 
-### CI
-
-Pushes and pull requests run four gates in GitHub Actions: `lint`, `typecheck`, `test`, and `trivy` (filesystem CVE scan). The `publish` workflow fires on GitHub Release and pushes to npm with provenance attestation.
-
 ---
 
 ## License
