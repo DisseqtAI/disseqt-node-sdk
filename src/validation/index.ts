@@ -1,0 +1,16 @@
+export const VALIDATION_DEFAULT_BASE_URL = 'https://api.disseqt.ai/realtime-validations';
+export const VALIDATION_PATH_TEMPLATE = '/api/v1/sdk/validators/{domain}/{validator}';
+
+export interface ValidationClientConfig {
+  apiKey: string;
+  projectId: string;
+  baseUrl?: string;
+  timeoutMs?: number;
+}
+
+export * from './enums.js';
+export * from './models.js';
+export * from './routes.js';
+export * from './validators.js';
+export * from './helpers.js';
+export * from './client.js';
