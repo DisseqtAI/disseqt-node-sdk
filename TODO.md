@@ -42,7 +42,7 @@ This file should be updated with every meaningful commit. Keep completed items c
 - Prompt Packs client: `DisseqtAPIClient`
 - Agentic client: `DisseqtAgenticClient`
 - Validation headers: `X-API-Key`, `X-Project-Id`, `Content-Type: application/json`
-- Validation default base URL: `https://production-monitoring-eu.disseqt.ai`
+- Validation default base URL: `https://api.disseqt.ai/realtime-validations`
 - Validation endpoint: `/api/v1/sdk/validators/{domain}/{validator}`
-- Prompt Packs default base URL: `http://localhost:8000`
+- Prompt Packs default base URL: `https://api.disseqt.ai`
 - Prompt Packs path prefix: `/sdk/prompt-packs/api/v1/sdk/prompt-packs`

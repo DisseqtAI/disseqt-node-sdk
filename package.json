@@ -1,6 +1,6 @@
 {
   "name": "@disseqt-ai/sdk",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Node.js SDK for Disseqt AI validation, prompt packs, and agentic tracing.",
   "license": "Proprietary",
   "author": "Disseqt AI Limited <support@disseqt.ai>",

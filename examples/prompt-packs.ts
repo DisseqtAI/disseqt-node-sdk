@@ -7,7 +7,6 @@ import {
 const client = new DisseqtAPIClient({
   apiKey: 'your-api-key',
   projectId: 'your-project-id',
-  baseUrl: 'http://localhost:8000',
 });
 
 const pack = await client.generatePromptPack({

@@ -11,3 +11,6 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 .turbo/
+
+# Local Claude Code skill — kept on disk for editor use, not shipped with the SDK
+.claude/

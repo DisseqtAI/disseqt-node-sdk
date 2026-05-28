@@ -15,7 +15,7 @@ import {
   toPromptPackOutputValidationRequest,
 } from './models.js';
 
-export const PROMPT_PACKS_DEFAULT_BASE_URL = 'http://localhost:8000';
+export const PROMPT_PACKS_DEFAULT_BASE_URL = 'https://api.disseqt.ai';
 export const PROMPT_PACKS_PATH_PREFIX = '/sdk/prompt-packs/api/v1/sdk/prompt-packs';
 
 export interface DisseqtAPIClientConfig extends DisseqtHttpTransportConfig {

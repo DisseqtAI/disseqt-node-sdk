@@ -103,7 +103,6 @@ import {
 const api = new DisseqtAPIClient({
   apiKey: 'your-api-key',
   projectId: 'your-project-id',
-  baseUrl: 'http://localhost:8000',
 });
 
 const pack = await api.generatePromptPack({
@@ -158,7 +157,7 @@ Default endpoints and headers used by the clients:
 - Validation default base URL: `https://api.disseqt.ai/realtime-validations`
 - Validation path: `/api/v1/sdk/validators/{domain}/{validator}`
 - Composite path: `/api/v1/validators/composite/evaluate`
-- Prompt Packs default base URL: `http://localhost:8000`
+- Prompt Packs default base URL: `https://api.disseqt.ai`
 - Prompt Packs path prefix: `/sdk/prompt-packs/api/v1/sdk/prompt-packs`
 - Agentic endpoint: `https://api.disseqt.ai/agentic-monitoring/api/v1/traces`
 
