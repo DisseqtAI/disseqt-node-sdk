@@ -7,7 +7,7 @@ This is a different client class from `Client` and `DisseqtAgenticClient` — it
 ## Client
 
 ```ts
-import { DisseqtAPIClient } from '@disseqt/ai-sdk';
+import { DisseqtAPIClient } from '@disseqt-ai/sdk';
 
 const client = new DisseqtAPIClient({
   apiKey: process.env.DISSEQT_API_KEY!,
@@ -21,7 +21,7 @@ const client = new DisseqtAPIClient({
 ### 1. Generate a pack
 
 ```ts
-import { DisseqtAPIClient } from '@disseqt/ai-sdk';
+import { DisseqtAPIClient } from '@disseqt-ai/sdk';
 
 const pack = await client.generatePromptPack({
   packName: 'Security Pack',
@@ -58,7 +58,7 @@ const runId = String(run.id ?? run.run_id);
 ### 3. Attach output validations
 
 ```ts
-import { OutputValidationMetric, PromptPackOutputValidationCategory } from '@disseqt/ai-sdk';
+import { OutputValidationMetric, PromptPackOutputValidationCategory } from '@disseqt-ai/sdk';
 
 await client.createOutputValidation(runId, {
   promptPackOutputValidationRunName: 'Safety Validation',

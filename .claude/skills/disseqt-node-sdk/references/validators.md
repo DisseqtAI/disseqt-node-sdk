@@ -94,7 +94,7 @@ Then bump `EXPECTED_VALIDATOR_COUNT`. The `config()` helper at the bottom of tha
 You almost never need to. But for code that loops over a dynamic list of `(domain, slug, data)` triples, the generic form is convenient:
 
 ```ts
-import { Client, ValidatorDomain, OutputValidation, OutputValidationRequest } from '@disseqt/ai-sdk';
+import { Client, ValidatorDomain, OutputValidation, OutputValidationRequest } from '@disseqt-ai/sdk';
 
 await client.validate({
   domain: ValidatorDomain.OutputValidation,

@@ -1,13 +1,13 @@
-# Quickstart — `@disseqt/ai-sdk`
+# Quickstart — `@disseqt-ai/sdk`
 
 ## Install
 
 ```bash
-npm install @disseqt/ai-sdk
+npm install @disseqt-ai/sdk
 # or
-pnpm add @disseqt/ai-sdk
+pnpm add @disseqt-ai/sdk
 # or
-yarn add @disseqt/ai-sdk
+yarn add @disseqt-ai/sdk
 ```
 
 Requires Node ≥ 18.18. ESM-first; the CommonJS build is bundled at `dist/index.cjs` for `require()` users.
@@ -29,7 +29,7 @@ The smoke script also recognises `DISSEQT_TIMEOUT_SECONDS` and `DISSEQT_DEBUG=1`
 ## First validator call
 
 ```ts
-import { Client } from '@disseqt/ai-sdk';
+import { Client } from '@disseqt-ai/sdk';
 
 const client = new Client({
   apiKey: process.env.DISSEQT_API_KEY!,
@@ -49,7 +49,7 @@ console.log(result.score, result.threshold_validated_result);
 ## First trace
 
 ```ts
-import { DisseqtAgenticClient, startTrace, traceLlmCall } from '@disseqt/ai-sdk';
+import { DisseqtAgenticClient, startTrace, traceLlmCall } from '@disseqt-ai/sdk';
 
 const client = new DisseqtAgenticClient({
   apiKey: process.env.DISSEQT_API_KEY!,

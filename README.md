@@ -7,7 +7,7 @@ The SDK is authored in TypeScript and published as JavaScript with type declarat
 ## Installation
 
 ```bash
-npm install @disseqt/ai-sdk
+npm install @disseqt-ai/sdk
 ```
 
 ## Development
@@ -64,7 +64,7 @@ The script at `scripts/run-all-validators.ts` mirrors the Python validation note
 ## Validation
 
 ```ts
-import { Client } from '@disseqt/ai-sdk';
+import { Client } from '@disseqt-ai/sdk';
 
 const client = new Client({
   apiKey: 'your-api-key',
@@ -80,7 +80,7 @@ const result = await client.input.toxicity(
 The generic Python-compatible surface is also available:
 
 ```ts
-import { InputValidation, InputValidator, SDKConfigInput } from '@disseqt/ai-sdk';
+import { InputValidation, InputValidator, SDKConfigInput } from '@disseqt-ai/sdk';
 
 await client.validate(
   new InputValidator({
@@ -98,7 +98,7 @@ import {
   DisseqtAPIClient,
   OutputValidationMetric,
   PromptPackOutputValidationCategory,
-} from '@disseqt/ai-sdk';
+} from '@disseqt-ai/sdk';
 
 const api = new DisseqtAPIClient({
   apiKey: 'your-api-key',
@@ -123,7 +123,7 @@ Python-compatible method names such as `generate_prompt_pack`, `create_run`, and
 ## Agentic Tracing
 
 ```ts
-import { DisseqtAgenticClient, SpanKind, startTrace, traceLlmCall } from '@disseqt/ai-sdk';
+import { DisseqtAgenticClient, SpanKind, startTrace, traceLlmCall } from '@disseqt-ai/sdk';
 
 const agentic = new DisseqtAgenticClient({
   apiKey: 'your-api-key',
