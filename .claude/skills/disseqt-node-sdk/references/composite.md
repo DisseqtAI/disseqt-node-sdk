@@ -10,7 +10,7 @@ The SDK handles the routing — you call `client.composite.evaluate(data)` and t
 ## Minimal call
 
 ```ts
-import { Client } from '@disseqt/ai-sdk';
+import { Client } from '@disseqt-ai/sdk';
 
 const client = new Client({
   apiKey: process.env.DISSEQT_API_KEY!,

@@ -1,11 +1,11 @@
 ---
 name: disseqt-node-sdk
-description: Reference and recipes for using `@disseqt/ai-sdk` (the Disseqt Node.js / TypeScript SDK) — calling any of its ~66 validators (input/output/RAG/agentic/MCP/composite), setting up agentic tracing with spans for LLM and tool calls, generating and running prompt packs, plus internal scaffolding for adding new validator cases. Invoke this skill whenever the user mentions `@disseqt/ai-sdk`, the `disseqt-node-sdk` repo, the `Client` / `DisseqtAgenticClient` / `DisseqtAPIClient` classes, validator slugs like `toxicity` / `prompt-injection` / `factual-consistency` / `topic-adherence` / `prompt-injection`, the `validators:all` script, `startTrace` / `traceLlmCall` / `traceToolCall`, "composite score", "prompt pack", or asks how to wire Disseqt validation or tracing into a Node/TypeScript codebase — even if they don't name the SDK explicitly.
+description: Reference and recipes for using `@disseqt-ai/sdk` (the Disseqt Node.js / TypeScript SDK) — calling any of its ~66 validators (input/output/RAG/agentic/MCP/composite), setting up agentic tracing with spans for LLM and tool calls, generating and running prompt packs, plus internal scaffolding for adding new validator cases. Invoke this skill whenever the user mentions `@disseqt-ai/sdk`, the `disseqt-node-sdk` repo, the `Client` / `DisseqtAgenticClient` / `DisseqtAPIClient` classes, validator slugs like `toxicity` / `prompt-injection` / `factual-consistency` / `topic-adherence` / `prompt-injection`, the `validators:all` script, `startTrace` / `traceLlmCall` / `traceToolCall`, "composite score", "prompt pack", or asks how to wire Disseqt validation or tracing into a Node/TypeScript codebase — even if they don't name the SDK explicitly.
 ---
 
 # Disseqt Node SDK Reference
 
-This skill helps you use `@disseqt/ai-sdk` correctly without reading the source. It covers three product surfaces and the workflows that go with them.
+This skill helps you use `@disseqt-ai/sdk` correctly without reading the source. It covers three product surfaces and the workflows that go with them.
 
 ## The three surfaces
 
@@ -13,9 +13,9 @@ The SDK exposes three independent client classes. They share the API-key/project
 
 | Class | Module | Purpose |
 |---|---|---|
-| `Client` (alias `DisseqtClient`) | `@disseqt/ai-sdk` | Run any of the ~66 individual validators or the Composite Score evaluator. Synchronous request/response. |
-| `DisseqtAgenticClient` | `@disseqt/ai-sdk` | Emit OpenTelemetry-style traces of agent runs (LLM calls, tool calls, agent actions). Buffered, fire-and-forget. |
-| `DisseqtAPIClient` | `@disseqt/ai-sdk` | Manage Prompt Packs: generate a pack, create a run against a model, attach output validations. |
+| `Client` (alias `DisseqtClient`) | `@disseqt-ai/sdk` | Run any of the ~66 individual validators or the Composite Score evaluator. Synchronous request/response. |
+| `DisseqtAgenticClient` | `@disseqt-ai/sdk` | Emit OpenTelemetry-style traces of agent runs (LLM calls, tool calls, agent actions). Buffered, fire-and-forget. |
+| `DisseqtAPIClient` | `@disseqt-ai/sdk` | Manage Prompt Packs: generate a pack, create a run against a model, attach output validations. |
 
 If the user's question touches validators → load `references/validators.md`. Tracing → `references/tracing.md`. Composite scoring → `references/composite.md`. Prompt packs → `references/prompt-packs.md`. Anything about installation, auth, env vars, or first call → `references/quickstart.md`.
 
@@ -34,7 +34,7 @@ node <skill-path>/scripts/introspect.mjs tracing                       # tracing
 
 The script auto-locates the SDK in this order:
 1. `$DISSEQT_SDK_ROOT` if set
-2. `./node_modules/@disseqt/ai-sdk/dist` (consumer project)
+2. `./node_modules/@disseqt-ai/sdk/dist` (consumer project)
 3. `./src` and `./dist` (running inside `disseqt-node-sdk` repo)
 
 If none resolve, it prints a clear error telling you to set `DISSEQT_SDK_ROOT` or `cd` into a project that depends on the SDK.

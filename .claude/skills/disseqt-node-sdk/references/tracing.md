@@ -12,7 +12,7 @@ The tracing client is **separate** from the validation `Client`. They share auth
 ## Client setup
 
 ```ts
-import { DisseqtAgenticClient } from '@disseqt/ai-sdk';
+import { DisseqtAgenticClient } from '@disseqt-ai/sdk';
 
 const client = new DisseqtAgenticClient({
   apiKey: process.env.DISSEQT_API_KEY!,
@@ -32,7 +32,7 @@ const client = new DisseqtAgenticClient({
 ### 1. Block scope: `startTrace(...).run(callback)` (recommended)
 
 ```ts
-import { startTrace, traceLlmCall } from '@disseqt/ai-sdk';
+import { startTrace, traceLlmCall } from '@disseqt-ai/sdk';
 
 await startTrace(client, 'chat_turn', { intentId: 'q1' }).run(async (trace) => {
   const llm = traceLlmCall(trace, {
@@ -55,7 +55,7 @@ The `.run()` wrapper closes the trace and sends it to the buffer when the callba
 For wrapping an existing handler in one call:
 
 ```ts
-import { traceFunction, SpanKind } from '@disseqt/ai-sdk';
+import { traceFunction, SpanKind } from '@disseqt-ai/sdk';
 
 const handleChatTurn = traceFunction(
   client,
@@ -76,7 +76,7 @@ Each call opens its own trace. Exceptions are recorded on the span as errors and
 If you need to thread a trace across boundaries that the `.run()` shape can't model (e.g. an event loop, multiple async batches):
 
 ```ts
-import { startTrace } from '@disseqt/ai-sdk';
+import { startTrace } from '@disseqt-ai/sdk';
 
 const wrapper = startTrace(client, 'long_running_workflow');
 const span = wrapper.trace.startSpan('step_1', SpanKind.Internal);
@@ -143,7 +143,7 @@ Run `node <skill-path>/scripts/introspect.mjs tracing` for the up-to-date list. 
 If your codebase wants ambient access (the way OpenTelemetry's global tracer works), set a singleton:
 
 ```ts
-import { setClient, getCurrentClient, isInitialized } from '@disseqt/ai-sdk';
+import { setClient, getCurrentClient, isInitialized } from '@disseqt-ai/sdk';
 
 setClient(new DisseqtAgenticClient({ /* config */ }));
 

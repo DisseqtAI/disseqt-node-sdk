@@ -10,7 +10,7 @@
 // Source lookup order:
 //   1. $DISSEQT_SDK_ROOT (treat as the package root; we'll try src/ then dist/)
 //   2. ./src and ./dist relative to cwd (running inside disseqt-node-sdk repo)
-//   3. ./node_modules/@disseqt/ai-sdk/dist (consumer project)
+//   3. ./node_modules/@disseqt-ai/sdk/dist (consumer project)
 //
 // The script reads either the TypeScript source (preferred — has comments and
 // init interfaces) or the bundled .d.ts (works for installed packages). It does
@@ -56,7 +56,7 @@ function locateSdk() {
   }
 
   fail(
-    'could not find Disseqt SDK. Set DISSEQT_SDK_ROOT, or cd into the disseqt-node-sdk repo / a project that depends on @disseqt/ai-sdk.',
+    'could not find Disseqt SDK. Set DISSEQT_SDK_ROOT, or cd into the disseqt-node-sdk repo / a project that depends on @disseqt-ai/sdk.',
   );
 }
 
@@ -308,7 +308,7 @@ function renderShow(catalog, domain, slug) {
   out += `**Request model**: \`${d.requestModel}\`\n`;
   out += `**Config required**: ${d.requiresConfig ? 'yes (`{ threshold, customLabels?, labelThresholds? }`)' : 'no'}\n\n`;
   out += `## Data fields\n\n\`\`\`ts\n{\n${fieldsTable}\n}\n\`\`\`\n\n`;
-  out += `## Example\n\n\`\`\`ts\nimport { Client } from '@disseqt/ai-sdk';\n\nconst client = new Client({\n  apiKey: process.env.DISSEQT_API_KEY!,\n  projectId: process.env.DISSEQT_PROJECT_ID!,\n});\n\n${callLine}\n\`\`\`\n\n`;
+  out += `## Example\n\n\`\`\`ts\nimport { Client } from '@disseqt-ai/sdk';\n\nconst client = new Client({\n  apiKey: process.env.DISSEQT_API_KEY!,\n  projectId: process.env.DISSEQT_PROJECT_ID!,\n});\n\n${callLine}\n\`\`\`\n\n`;
   out += `## Wire payload\n\nServer receives:\n\n\`\`\`json\n${JSON.stringify(buildExamplePayload(d, member), null, 2)}\n\`\`\`\n`;
   return out;
 }
@@ -374,7 +374,7 @@ function renderTracing(sdk) {
   out.push('# Agentic Tracing API\n');
   out.push('## Client');
   out.push('```ts');
-  out.push("import { DisseqtAgenticClient } from '@disseqt/ai-sdk';");
+  out.push("import { DisseqtAgenticClient } from '@disseqt-ai/sdk';");
   out.push('');
   out.push('const client = new DisseqtAgenticClient({');
   out.push('  apiKey: process.env.DISSEQT_API_KEY!,');
@@ -397,7 +397,7 @@ function renderTracing(sdk) {
   out.push('');
   out.push('## Typical usage');
   out.push('```ts');
-  out.push("import { DisseqtAgenticClient, SpanKind, startTrace, traceLlmCall, traceToolCall } from '@disseqt/ai-sdk';");
+  out.push("import { DisseqtAgenticClient, SpanKind, startTrace, traceLlmCall, traceToolCall } from '@disseqt-ai/sdk';");
   out.push('');
   out.push('const client = new DisseqtAgenticClient({ /* ...as above... */ });');
   out.push('');
@@ -445,7 +445,7 @@ function renderTracing(sdk) {
   out.push('');
   out.push('## Decorator-style: `traceFunction`');
   out.push('```ts');
-  out.push("import { traceFunction, SpanKind } from '@disseqt/ai-sdk';");
+  out.push("import { traceFunction, SpanKind } from '@disseqt-ai/sdk';");
   out.push('');
   out.push('const tracedHandler = traceFunction(client, async (userInput: string) => {');
   out.push('  // ... do work ...');
