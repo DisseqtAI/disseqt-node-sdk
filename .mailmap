@@ -1,0 +1,16 @@
+# Canonical author identities for this repository.
+#
+# Lines below remap commit-author and commit-trailer identities so that
+# `git shortlog -sne` and the GitHub contributors graph show a single
+# canonical entry per person.
+#
+# Format reference: https://git-scm.com/docs/gitmailmap
+
+# Fold `sumit-disseqt` (GitHub web-edit identity) into Sumit's main identity.
+Sumit Das <sumit.das@disseqt.ai>  sumit-disseqt <sumit.das@disseqt.ai>
+
+# Co-authored commits authored alongside Claude Code (Anthropic's CLI assistant)
+# are attributed to the human who ran the tool. Remap the Claude trailer
+# identity to Sumit so the contributors graph reflects authored work, not
+# AI-assistance trailers.
+Sumit Das <sumit.das@disseqt.ai>  Claude Opus 4.7 (1M context) <noreply@anthropic.com>
