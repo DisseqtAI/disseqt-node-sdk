@@ -1,10 +1,33 @@
 # Changelog
 
+## 0.1.1
+
+### Changed
+
+- **Default validation API endpoint**: `Client` default `baseUrl` updated from
+  `https://production-monitoring-eu.disseqt.ai` to
+  `https://api.disseqt.ai/realtime-validations`. Callers using the default will
+  now target the new endpoint on upgrade. Pass `baseUrl` explicitly to opt out.
+  Mirrors the Python SDK's [0.3.0] change.
+- **`DisseqtAPIClient` default base URL**: changed from `http://localhost:8000`
+  to `https://api.disseqt.ai` so prompt-pack calls hit the production gateway
+  out of the box. Pass `baseUrl` explicitly to point at a local dev gateway or
+  staging.
+- README and TODO updated to reflect the new defaults.
+
+### Removed
+
+- The bundled Claude Code skill under `.claude/skills/disseqt-node-sdk/`
+  is no longer shipped with the repo. It now lives on contributors'
+  machines via the standard `~/.claude/skills/` lookup and is excluded
+  via `.gitignore`. Source unchanged; only the distribution surface
+  shrank.
+
 ## 0.1.0
 
 - Initial Node.js SDK scaffold.
-- Added validation SDK with Python-compatible request models, routes, payloads, errors, and typed helpers.
-- Added Prompt Packs REST client with generation, runs, output validations, CSV handling, pagination, and delete flows.
-- Added Agentic tracing SDK with trace/span models, semantic attributes, batching, transport, client, and helper APIs.
-- Added examples, tests, ESM/CJS builds, and npm pack dry-run verification.
-- Added `npm run smoke:all` / `npm run smoke:all:live` to exercise all validator slugs and agentic span kinds with one-line pass/fail logs.
+- Validation SDK with typed request models, routes, payloads, errors, and per-domain typed helpers.
+- Prompt Packs REST client with generation, runs, output validations, CSV handling, pagination, and delete flows.
+- Agentic tracing SDK with trace/span models, semantic attributes, batching, transport, client, and helper APIs.
+- Examples, tests, ESM/CJS builds, and npm pack dry-run verification.
+- `npm run smoke:all` / `npm run smoke:all:live` to exercise all validator slugs and agentic span kinds with one-line pass/fail logs.

@@ -52,14 +52,14 @@ const lastBody = (fetcher: ReturnType<typeof vi.fn>) =>
   JSON.parse(String(lastCall(fetcher)[1]?.body));
 
 describe('DisseqtAPIClient construction', () => {
-  it('matches Python defaults and strips trailing slash', () => {
+  it('strips trailing slash from baseUrl and composes URLs via the path prefix', () => {
     const client = new DisseqtAPIClient({
       projectId: 'p',
       apiKey: 'k',
-      baseUrl: 'http://localhost:8000/',
+      baseUrl: `${PROMPT_PACKS_DEFAULT_BASE_URL}/`,
     });
 
-    expect(client.baseUrl).toBe('http://localhost:8000');
+    expect(client.baseUrl).toBe(PROMPT_PACKS_DEFAULT_BASE_URL);
     expect(client.timeoutMs).toBe(30_000);
     expect(client._url('/generate')).toBe(`${PREFIX}/generate`);
   });
