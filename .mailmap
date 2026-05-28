@@ -1,16 +1,22 @@
 # Canonical author identities for this repository.
 #
-# Lines below remap commit-author and commit-trailer identities so that
-# `git shortlog -sne` and the GitHub contributors graph show a single
-# canonical entry per person.
+# GitHub honours `.mailmap` for the contributors graph and the per-repo
+# stats. The email-only form below is the most reliable: any commit-author
+# or `Co-Authored-By` trailer carrying the matched email gets re-attributed,
+# regardless of the display name on it.
 #
 # Format reference: https://git-scm.com/docs/gitmailmap
 
-# Fold `sumit-disseqt` (GitHub web-edit identity) into Sumit's main identity.
-Sumit Das <sumit.das@disseqt.ai>  sumit-disseqt <sumit.das@disseqt.ai>
+# Claude Code (Anthropic's CLI assistant) — co-author trailer attribution
+# folds into the human who ran the tool.
+<sumit.das@disseqt.ai> <noreply@anthropic.com>
 
-# Co-authored commits authored alongside Claude Code (Anthropic's CLI assistant)
-# are attributed to the human who ran the tool. Remap the Claude trailer
-# identity to Sumit so the contributors graph reflects authored work, not
-# AI-assistance trailers.
-Sumit Das <sumit.das@disseqt.ai>  Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+# GitHub web-edit identity folds into the local-git identity.
+<sumit.das@disseqt.ai> <sumit-disseqt@users.noreply.github.com>
+
+# Display-name fallbacks (covers any commit where the name field is the
+# variant but the email is already canonical).
+Sumit Das <sumit.das@disseqt.ai> Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+Sumit Das <sumit.das@disseqt.ai> Claude <noreply@anthropic.com>
+Sumit Das <sumit.das@disseqt.ai> claude <noreply@anthropic.com>
+Sumit Das <sumit.das@disseqt.ai> sumit-disseqt <sumit.das@disseqt.ai>
