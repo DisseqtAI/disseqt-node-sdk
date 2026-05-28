@@ -59,7 +59,7 @@ Run the TypeScript validator walkthrough:
 npm run validators:all
 ```
 
-The script at `scripts/run-all-validators.ts` mirrors the Python validation notebook, runs all 67 validator cases, logs one line per pass/fail, continues after errors, and exits non-zero when any validator fails.
+The script at `scripts/run-all-validators.ts` runs every supported validator case against the live Disseqt API, logs one line per pass/fail, continues after errors, and exits non-zero when any validator fails.
 
 ## Validation
 
@@ -77,7 +77,7 @@ const result = await client.input.toxicity(
 );
 ```
 
-The generic Python-compatible surface is also available:
+A lower-level generic surface is also available when you want to drive validators by domain and slug at runtime:
 
 ```ts
 import { InputValidation, InputValidator, SDKConfigInput } from '@disseqt-ai/sdk';
@@ -118,7 +118,7 @@ const pack = await api.generatePromptPack({
 });
 ```
 
-Python-compatible method names such as `generate_prompt_pack`, `create_run`, and `download_pack_csv` are available alongside camelCase aliases.
+Snake_case method aliases such as `generate_prompt_pack`, `create_run`, and `download_pack_csv` are exposed alongside their camelCase counterparts so either naming style works.
 
 ## Agentic Tracing
 
@@ -150,9 +150,9 @@ await agentic.flush();
 await agentic.shutdown();
 ```
 
-## Compatibility
+## Defaults and Wire Conventions
 
-The Node SDK mirrors the Python SDK wire behavior:
+Default endpoints and headers used by the clients:
 
 - Headers: `X-API-Key`, `X-Project-Id`, and `Content-Type: application/json`
 - Validation default base URL: `https://api.disseqt.ai/realtime-validations`
