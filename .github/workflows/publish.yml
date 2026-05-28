@@ -13,7 +13,6 @@ jobs:
       name: npm
       url: https://www.npmjs.com/package/@disseqt-ai/sdk
     permissions:
-      id-token: write # Required for npm provenance
       contents: read
     steps:
       - uses: actions/checkout@v4
@@ -31,7 +30,12 @@ jobs:
       - name: Build package
         run: npm run build
 
+      # NOTE: --provenance is omitted because this repository is private.
+      # npm's sigstore attestation requires a public source repo so third
+      # parties can verify the build. Re-add the flag (and restore the
+      # `id-token: write` permission above) if/when the repo is flipped
+      # to public.
       - name: Publish to npm
-        run: npm publish --provenance --access public
+        run: npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
