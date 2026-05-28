@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.2
+
+### Changed
+
+- README no longer carries the themes-classifier "unsupported until the
+  platform team enables the route" note. No code change — the validator is
+  still exposed; the registry page just doesn't lead with the caveat.
+
 ## 0.1.1
 
 ### Changed

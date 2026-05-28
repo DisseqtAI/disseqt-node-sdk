@@ -305,8 +305,6 @@ The SDK ships **66 validator slugs** across six working domains. Use the typed h
 
 Single endpoint that aggregates many validators with configurable weights. Hits `/api/v1/validators/composite/evaluate` (no `/sdk/` prefix). See [examples/composite-score.ts](./examples/composite-score.ts).
 
-> **Note**: The Themes Classifier (`client.themes.classify`) is exposed by the SDK but the server-side dispatcher currently returns HTTP 500 for it. Treat as unsupported until the platform team enables the route.
-
 ---
 
 ## Request Models
