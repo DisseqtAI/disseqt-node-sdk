@@ -116,6 +116,14 @@ export class InputValidationHelpers {
   childSafety(data: InputValidationData, config: ValidatorConfigInput): Promise<JsonObject> {
     return this.run(InputValidation.ChildSafety, data, config);
   }
+
+  intentGuard(data: InputValidationData, config: ValidatorConfigInput): Promise<JsonObject> {
+    return this.run(InputValidation.IntentGuard, data, config);
+  }
+
+  intentCompliance(data: InputValidationData, config: ValidatorConfigInput): Promise<JsonObject> {
+    return this.run(InputValidation.IntentCompliance, data, config);
+  }
 }
 
 export class OutputValidationHelpers {
@@ -243,6 +251,14 @@ export class OutputValidationHelpers {
 
   insecureOutput(data: OutputValidationData, config: ValidatorConfigInput): Promise<JsonObject> {
     return this.run(OutputValidation.InsecureOutput, data, config);
+  }
+
+  intentGuard(data: OutputValidationData, config: ValidatorConfigInput): Promise<JsonObject> {
+    return this.run(OutputValidation.IntentGuard, data, config);
+  }
+
+  intentCompliance(data: OutputValidationData, config: ValidatorConfigInput): Promise<JsonObject> {
+    return this.run(OutputValidation.IntentCompliance, data, config);
   }
 
   bleuScore(data: OutputValidationData, config: ValidatorConfigInput): Promise<JsonObject> {

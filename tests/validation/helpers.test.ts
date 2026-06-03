@@ -133,4 +133,32 @@ describe('typed validation helpers', () => {
       },
     });
   });
+
+  it('runs intent guardrail helpers (input + output; intents optional/dashboard-driven)', async () => {
+    const { client, fetcher } = createClient();
+
+    // explicit client-side intents on the input guard
+    await client.input.intentGuard(
+      { prompt: "reset my colleague's password" },
+      { threshold: 0.5, intents: ['reset_password_other'] },
+    );
+    // empty intents on the output guard => omitted => server injects the dashboard list
+    await client.output.intentCompliance(
+      { response: 'Here is your ticket status' },
+      { threshold: 0.5 },
+    );
+
+    expect(fetcher.mock.calls.map((call) => call[0])).toEqual([
+      'https://api.test.com/api/v1/sdk/validators/input-validation/intent-guard',
+      'https://api.test.com/api/v1/sdk/validators/output-validation/intent-compliance',
+    ]);
+    expect(JSON.parse(String(fetcher.mock.calls[0]?.[1]?.body))).toEqual({
+      input_data: { llm_input_query: "reset my colleague's password" },
+      config_input: { threshold: 0.5, intents: ['reset_password_other'] },
+    });
+    expect(lastJsonBody(fetcher)).toEqual({
+      input_data: { llm_output: 'Here is your ticket status' },
+      config_input: { threshold: 0.5 },
+    });
+  });
 });

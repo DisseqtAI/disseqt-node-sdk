@@ -277,4 +277,63 @@ describe('Client', () => {
       message: 'config is required for standard validators',
     });
   });
+
+  it('sends config_input.intents for the input intent-guard validator', async () => {
+    const fetcher = vi.fn(async (...args: [string | URL | Request, RequestInit?]) => {
+      void args;
+      return jsonResponse({ threshold_validated_result: 'Fail', enforcement: 'blocking' });
+    });
+    const client = new Client({
+      projectId: 'project',
+      apiKey: 'key',
+      baseUrl: 'https://test-api.disseqt.ai',
+      fetch: fetcher,
+    });
+
+    await client.validate(
+      new InputValidator({
+        slug: InputValidation.IntentGuard,
+        data: new InputValidationRequest({ prompt: "reset my colleague's password" }),
+        config: new SDKConfigInput({ threshold: 0.5, intents: ['reset_password_other'] }),
+      }),
+    );
+
+    expect(fetcher.mock.calls[0]?.[0]).toBe(
+      'https://test-api.disseqt.ai/api/v1/sdk/validators/input-validation/intent-guard',
+    );
+    expect(JSON.parse(String(fetcher.mock.calls[0]?.[1]?.body))).toEqual({
+      input_data: { llm_input_query: "reset my colleague's password" },
+      config_input: { threshold: 0.5, intents: ['reset_password_other'] },
+    });
+  });
+
+  it('omits intents (defers to the dashboard list) for the output intent-guard validator', async () => {
+    const fetcher = vi.fn(async (...args: [string | URL | Request, RequestInit?]) => {
+      void args;
+      return jsonResponse({ threshold_validated_result: 'Pass' });
+    });
+    const client = new Client({
+      projectId: 'project',
+      apiKey: 'key',
+      baseUrl: 'https://test-api.disseqt.ai',
+      fetch: fetcher,
+    });
+
+    await client.validate(
+      new OutputValidator({
+        slug: OutputValidation.IntentGuard,
+        data: { response: 'Sure, resetting your colleague password' },
+        config: { threshold: 0.5, intents: [] },
+      }),
+    );
+
+    expect(fetcher.mock.calls[0]?.[0]).toBe(
+      'https://test-api.disseqt.ai/api/v1/sdk/validators/output-validation/intent-guard',
+    );
+    // empty intents => omitted => the server injects the project's dashboard list
+    expect(JSON.parse(String(fetcher.mock.calls[0]?.[1]?.body))).toEqual({
+      input_data: { llm_output: 'Sure, resetting your colleague password' },
+      config_input: { threshold: 0.5 },
+    });
+  });
 });

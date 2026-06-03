@@ -24,6 +24,8 @@ export enum InputValidation {
   Nsfw = 'nsfw',
   InvisibleText = 'invisible-text',
   ChildSafety = 'child-safety',
+  IntentGuard = 'intent-guard',
+  IntentCompliance = 'intent-compliance',
 }
 
 export enum OutputValidation {
@@ -53,6 +55,8 @@ export enum OutputValidation {
   ChildSafety = 'child-safety',
   DataLeakage = 'data-leakage',
   InsecureOutput = 'insecure-output',
+  IntentGuard = 'intent-guard',
+  IntentCompliance = 'intent-compliance',
   BleuScore = 'bleu-score',
   RougeScore = 'rouge-score',
   MeteorScore = 'meteor-score',
