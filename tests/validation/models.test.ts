@@ -36,6 +36,10 @@ describe('validation enums', () => {
     expect(OutputValidation.FactualConsistency).toBe('factual-consistency');
     expect(OutputValidation.GrammarCorrectness).toBe('grammatical-correctness');
     expect(OutputValidation.CompressionScore).toBe('compression-score');
+    expect(InputValidation.IntentGuard).toBe('intent-guard');
+    expect(InputValidation.IntentCompliance).toBe('intent-compliance');
+    expect(OutputValidation.IntentGuard).toBe('intent-guard');
+    expect(OutputValidation.IntentCompliance).toBe('intent-compliance');
     expect(RagGrounding.ContextEntitiesRecall).toBe('context-entities-recall');
     expect(AgenticBehavior.ToolCallAccuracy).toBe('tool-call-accuracy');
     expect(McpSecurity.InsecureOutput).toBe('insecure-output');
@@ -68,6 +72,16 @@ describe('SDKConfigInput', () => {
       custom_labels: ['Safe', 'Risky'],
       label_thresholds: [0.3, 0.7],
     });
+  });
+
+  it('serializes intents when set and omits them when empty/absent (like Python)', () => {
+    expect(new SDKConfigInput({ threshold: 0.5 }).toDict()).not.toHaveProperty('intents');
+    expect(new SDKConfigInput({ threshold: 0.5, intents: [] }).toDict()).not.toHaveProperty(
+      'intents',
+    );
+    expect(
+      new SDKConfigInput({ threshold: 0.5, intents: ['reset_password_other'] }).toDict(),
+    ).toEqual({ threshold: 0.5, intents: ['reset_password_other'] });
   });
 });
 

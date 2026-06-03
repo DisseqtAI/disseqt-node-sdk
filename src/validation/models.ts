@@ -8,17 +8,23 @@ export interface SDKConfigInputInit {
   custom_labels?: string[] | null;
   labelThresholds?: number[] | null;
   label_thresholds?: number[] | null;
+  // Allow/block intent labels for the intent-guard / intent-compliance
+  // validators. An empty/omitted list defers to the project's
+  // dashboard-configured intent list (server-side authoritative).
+  intents?: string[] | null;
 }
 
 export class SDKConfigInput {
   readonly threshold: number;
   readonly customLabels: readonly string[] | null;
   readonly labelThresholds: readonly number[] | null;
+  readonly intents: readonly string[] | null;
 
   constructor(input: SDKConfigInputInit) {
     this.threshold = input.threshold;
     this.customLabels = input.customLabels ?? input.custom_labels ?? null;
     this.labelThresholds = input.labelThresholds ?? input.label_thresholds ?? null;
+    this.intents = input.intents ?? null;
   }
 
   toDict(): JsonObject {
@@ -28,6 +34,9 @@ export class SDKConfigInput {
     }
     if (this.labelThresholds !== null && this.labelThresholds.length > 0) {
       output.label_thresholds = [...this.labelThresholds];
+    }
+    if (this.intents !== null && this.intents.length > 0) {
+      output.intents = [...this.intents];
     }
     return output;
   }

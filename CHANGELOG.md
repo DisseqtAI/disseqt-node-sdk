@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.2.0
+
+### Added
+
+- **Intent validators**: `intent-guard` (block list) and `intent-compliance`
+  (allow list) on **both** the input and output domains — available via the typed
+  helpers (`client.input.intentGuard` / `client.input.intentCompliance` and the
+  `client.output.*` equivalents) and the `InputValidation` / `OutputValidation`
+  enums. Mirrors `disseqt-ai-sdk` (Python) 0.4.0.
+- **`SDKConfigInput.intents`**: optional `string[]` carried inside `config_input`
+  for the intent validators. An empty/omitted list defers to the project's
+  dashboard-configured intent list (server-side authoritative); a non-empty list
+  is unioned with it. The validate response exposes `enforcement`
+  ("blocking" | "advisory") for callers to gate on.
+
 ## 0.1.2
 
 ### Changed

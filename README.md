@@ -39,7 +39,7 @@ The package exposes three independent clients that share the same auth conventio
 
 | Client                               | Purpose                                                                                                                                      |
 | ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| **`Client`** (alias `DisseqtClient`) | Synchronous request/response validation — 66 validators across 6 domains plus the composite scorer.                                          |
+| **`Client`** (alias `DisseqtClient`) | Synchronous request/response validation — 70 validators across 6 domains plus the composite scorer.                                          |
 | **`DisseqtAgenticClient`**           | Fire-and-forget tracing. Emits OpenTelemetry-style spans for LLM calls, tool calls, and agent actions, with automatic batching and flushing. |
 | **`DisseqtAPIClient`**               | Prompt-pack lifecycle: generate, run, attach output validations, download results.                                                           |
 
@@ -279,15 +279,15 @@ Every standard validator accepts a config block with these fields:
 
 ## Available Validators
 
-The SDK ships **66 validator slugs** across six working domains. Use the typed helper on `Client` (e.g. `client.input.toxicity(...)`) or the generic surface (see [Two API Styles](#two-api-styles)).
+The SDK ships **70 validator slugs** across six working domains. Use the typed helper on `Client` (e.g. `client.input.toxicity(...)`) or the generic surface (see [Two API Styles](#two-api-styles)).
 
 ### Input Validation (`client.input.*`)
 
-`toxicity` · `bias` · `prompt-injection` · `intersectionality` · `racial-bias` · `gender-bias` · `political-bias` · `self-harm` · `violence` · `terrorism` · `sexual-content` · `hate-speech` · `nsfw` · `invisible-text` · `child-safety`
+`toxicity` · `bias` · `prompt-injection` · `intersectionality` · `racial-bias` · `gender-bias` · `political-bias` · `self-harm` · `violence` · `terrorism` · `sexual-content` · `hate-speech` · `nsfw` · `invisible-text` · `child-safety` · `intent-guard` · `intent-compliance`
 
 ### Output Validation (`client.output.*`)
 
-`factual-consistency` · `answer-relevance` · `conceptual-similarity` · `grammatical-correctness` · `response-tone` · `clarity` · `coherence` · `creativity` · `readability` · `diversity` · `narrative-continuity` · `bias` · `gender-bias` · `racial-bias` · `political-bias` · `intersectionality` · `toxicity` · `nsfw` · `terrorism` · `violence` · `self-harm` · `sexual-content` · `hate-speech` · `child-safety` · `data-leakage` · `insecure-output` · `bleu-score` · `rouge-score` · `meteor-score` · `cosine-similarity` · `fuzzy-score` · `compression-score`
+`factual-consistency` · `answer-relevance` · `conceptual-similarity` · `grammatical-correctness` · `response-tone` · `clarity` · `coherence` · `creativity` · `readability` · `diversity` · `narrative-continuity` · `bias` · `gender-bias` · `racial-bias` · `political-bias` · `intersectionality` · `toxicity` · `nsfw` · `terrorism` · `violence` · `self-harm` · `sexual-content` · `hate-speech` · `child-safety` · `data-leakage` · `insecure-output` · `intent-guard` · `intent-compliance` · `bleu-score` · `rouge-score` · `meteor-score` · `cosine-similarity` · `fuzzy-score` · `compression-score`
 
 ### RAG Grounding (`client.rag.*`)
 
@@ -454,7 +454,7 @@ npm run smoke:all
 DISSEQT_API_KEY=... DISSEQT_PROJECT_ID=... npm run smoke:all:live
 ```
 
-**End-to-end against the live validation gateway** (66 validators, ~50 seconds):
+**End-to-end against the live validation gateway** (70 validators, ~50 seconds):
 
 ```bash
 DISSEQT_API_KEY=... DISSEQT_PROJECT_ID=... npm run validators:all
