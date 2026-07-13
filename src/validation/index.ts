@@ -10,6 +10,7 @@ export interface ValidationClientConfig {
 
 export * from './enums.js';
 export * from './models.js';
+export * from './policy.js';
 export * from './routes.js';
 export * from './validators.js';
 export * from './helpers.js';
