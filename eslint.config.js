@@ -13,6 +13,7 @@ export default [
       'eslint.config.js',
       'tsup.config.ts',
       'vitest.config.ts',
+      'scripts/*.cjs',
     ],
   },
   eslint.configs.recommended,
