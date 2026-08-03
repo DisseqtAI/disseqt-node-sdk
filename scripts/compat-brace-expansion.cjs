@@ -41,13 +41,10 @@ try {
     process.exit(0);
   }
 
-  const shim =
-    `module.exports = Object.assign(expand, exports); /* ${MARKER} */\n`;
+  const shim = `module.exports = Object.assign(expand, exports); /* ${MARKER} */\n`;
   const sourceMap = '//# sourceMappingURL=index.js.map';
 
-  src = src.includes(sourceMap)
-    ? src.replace(sourceMap, shim + sourceMap)
-    : src + '\n' + shim;
+  src = src.includes(sourceMap) ? src.replace(sourceMap, shim + sourceMap) : src + '\n' + shim;
 
   fs.writeFileSync(target, src);
   console.log('[compat] brace-expansion CJS callable-default shim applied');
