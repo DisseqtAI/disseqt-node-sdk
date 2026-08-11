@@ -97,6 +97,17 @@ await client.composite.evaluate(data); // no config
 
 See [Two API Styles](#two-api-styles) for the equivalent low-level `client.validate(validator)` form.
 
+#### LLM-as-a-Judge
+
+Any paired validator can be graded by a certified LLM judge on **your own**
+LLM account — set `llmAsAJudge: true` with the mandatory `llmId` (copy it from
+Dashboard → AI Inventory → LLM Integrations → ID column). Full guide:
+[docs/llm-as-a-judge.md](./docs/llm-as-a-judge.md).
+
+```ts
+config: { threshold: 0.5, llmAsAJudge: true, llmId: '25dc0684-…' }
+```
+
 ### Composite Scoring
 
 Aggregates many validators into one weighted score:

@@ -12,6 +12,43 @@ export interface SDKConfigInputInit {
   // validators. An empty/omitted list defers to the project's
   // dashboard-configured intent list (server-side authoritative).
   intents?: string[] | null;
+  /**
+   * Reroute this validation to the paired certified LLM judge instead of the
+   * classic ML validator. Validators without a judge pairing fall back
+   * gracefully to the ML path (no error). Requires {@link SDKConfigInputInit.llmId}.
+   */
+  llmAsAJudge?: boolean;
+  llm_as_a_judge?: boolean;
+  /**
+   * Which LLM Integration judges the run. REQUIRED when `llmAsAJudge` is
+   * true (enforced in the constructor): an explicit id keeps judge selection
+   * auditable and fails fast at construction, instead of a server-side 4xx —
+   * or worse, the silent wrong-integration fallback a misspelled `judge`
+   * object key would produce. Serialized into the wire's nested judge block
+   * as `custom_llm_id`, so the server contract is unchanged.
+   *
+   * NOTE: the SERVER also supports a project-default judge integration; this
+   * SDK deliberately does not expose that fallback — there is currently no
+   * dashboard UI to set the default. If that UI ships, relax the constructor
+   * check rather than adding a second selection mechanism.
+   *
+   * Finding the id: Dashboard → AI Inventory → LLM Integrations — the ID
+   * column (and the row's view modal) has one-click copy. It is the
+   * INTEGRATION's id, not a model name. Only Permanent integrations have
+   * one; Temporary models are session-only and cannot be used here.
+   */
+  llmId?: string | null;
+  llm_id?: string | null;
+  /**
+   * Optional per-call judge override, honored only with `llmAsAJudge: true`.
+   * Keys: `custom_llm_id` (prefer the first-class `llmId`, which wins on
+   * conflict), `model`, `criteria`. The provider remains server-authoritative.
+   *
+   * `criteria` shapes QUALITY judges only. Certified SAFETY judges run their
+   * frozen rubric verbatim and ignore caller criteria (the response stamps
+   * `others.criteria_ignored: true` when that happens).
+   */
+  judge?: UnknownRecord | null;
 }
 
 export class SDKConfigInput {
@@ -19,12 +56,33 @@ export class SDKConfigInput {
   readonly customLabels: readonly string[] | null;
   readonly labelThresholds: readonly number[] | null;
   readonly intents: readonly string[] | null;
+  readonly llmAsAJudge: boolean;
+  readonly llmId: string | null;
+  readonly judge: Readonly<UnknownRecord> | null;
 
   constructor(input: SDKConfigInputInit) {
     this.threshold = input.threshold;
     this.customLabels = input.customLabels ?? input.custom_labels ?? null;
     this.labelThresholds = input.labelThresholds ?? input.label_thresholds ?? null;
     this.intents = input.intents ?? null;
+    this.llmAsAJudge = input.llmAsAJudge ?? input.llm_as_a_judge ?? false;
+    this.llmId = input.llmId ?? input.llm_id ?? null;
+    this.judge = input.judge ?? null;
+
+    const hasIntegrationId = Boolean(this.llmId || this.judge?.custom_llm_id);
+    if (this.llmAsAJudge && !hasIntegrationId) {
+      throw new Error(
+        'llmAsAJudge: true requires llmId — the LLM Integration that judges ' +
+          'the run. Copy it from Dashboard -> AI Inventory -> LLM Integrations ' +
+          '(ID column).',
+      );
+    }
+    if (this.llmId && !this.llmAsAJudge) {
+      throw new Error(
+        'llmId is only used with llmAsAJudge: true — set the flag, or drop ' +
+          'llmId to run the traditional ML validator.',
+      );
+    }
   }
 
   toDict(): JsonObject {
@@ -37,6 +95,19 @@ export class SDKConfigInput {
     }
     if (this.intents !== null && this.intents.length > 0) {
       output.intents = [...this.intents];
+    }
+    if (this.llmAsAJudge) {
+      output.llm_as_a_judge = true;
+    }
+    // The wire format nests the integration selector under "judge" as
+    // "custom_llm_id"; the flat llmId is client-side sugar and wins over a
+    // conflicting object key. The caller's judge object is never mutated.
+    const judgeBlock: JsonObject = this.judge ? { ...(this.judge as JsonObject) } : {};
+    if (this.llmId) {
+      judgeBlock.custom_llm_id = this.llmId;
+    }
+    if (Object.keys(judgeBlock).length > 0) {
+      output.judge = judgeBlock;
     }
     return output;
   }
