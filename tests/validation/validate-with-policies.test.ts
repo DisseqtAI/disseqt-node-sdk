@@ -533,3 +533,58 @@ describe('review findings regressions', () => {
     });
   });
 });
+
+describe('config_input forwarding (python parity: TestPolicyPathForwardsConfigInput)', () => {
+  // The validator's config_input travels to policy evaluation too — without
+  // it, per-request settings like llm_as_a_judge/judge never reach
+  // policy-run validators, and the judge engine toggle would silently not
+  // apply under policies.
+
+  it('forwards the validator config to each policy evaluate call', async () => {
+    const harness = mockRoutes({
+      [TOX_URL]: { json: VALIDATOR_RESPONSE },
+      [P1_URL]: { json: P2_PASS },
+    });
+
+    // Forwarding is key-agnostic — the judge engine selection rides the
+    // same path as every other config key, exactly as in python.
+    await client(harness).validate(
+      new InputValidator({
+        slug: InputValidation.Toxicity,
+        data: new InputValidationRequest({ prompt: 'hello' }),
+        config: { threshold: 0.7, llmAsAJudge: true, llmId: 'cllm-1' },
+      }),
+      { policies: [P1] },
+    );
+
+    const sent = harness.callsTo(P1_URL)[0]?.body;
+    expect(sent?.['config_input']).toEqual({
+      threshold: 0.7,
+      llm_as_a_judge: true,
+      judge: { custom_llm_id: 'cllm-1' },
+    });
+  });
+
+  it('a plain config is forwarded too', async () => {
+    const harness = mockRoutes({
+      [TOX_URL]: { json: VALIDATOR_RESPONSE },
+      [P1_URL]: { json: P2_PASS },
+    });
+
+    await client(harness).validate(toxicity(), { policies: [P1] });
+
+    expect(harness.callsTo(P1_URL)[0]?.body['config_input']).toEqual({ threshold: 0.5 });
+  });
+
+  it('a bare model sends no config_input key at all', async () => {
+    const harness = mockRoutes({ [P1_URL]: { json: P2_PASS } });
+
+    await client(harness).validate(new InputValidationRequest({ prompt: 'hi' }), {
+      policies: [P1],
+    });
+
+    const sent = harness.callsTo(P1_URL)[0]?.body;
+    expect(sent).not.toHaveProperty('config_input');
+    expect(sent?.['input_data']).toEqual({ llm_input_query: 'hi' });
+  });
+});

@@ -337,10 +337,20 @@ export class Client {
     // models serialize themselves.
     let validator: Validatable | null = null;
     let inputData: JsonObject;
+    // The validator's config_input travels to policy evaluation too (python
+    // parity: TestPolicyPathForwardsConfigInput). Without it, per-request
+    // settings like llm_as_a_judge/judge never reach policy-run validators —
+    // the judge engine toggle would silently not apply under policies. Bare
+    // models send none.
+    let configInput: JsonObject | null = null;
     if (isValidatable(request) || isGenericValidationRequest(request)) {
       validator = toValidatable(request);
-      const payload = validator.toPayload() as { input_data?: JsonObject };
+      const payload = validator.toPayload() as {
+        input_data?: JsonObject;
+        config_input?: JsonObject;
+      };
       inputData = { ...(payload.input_data ?? {}) };
+      configInput = payload.config_input ?? null;
     } else if (hasToInputData(request)) {
       inputData = request.toInputData();
     } else {
@@ -360,7 +370,9 @@ export class Client {
     const validation = validator === null ? null : await this.runValidator(validator);
     const envelopes: JsonObject[] = [];
     for (const policyId of policyIds) {
-      envelopes.push(await this.postPolicyEvaluate(policyId, inputData, applicationName));
+      envelopes.push(
+        await this.postPolicyEvaluate(policyId, inputData, applicationName, configInput),
+      );
     }
     return { validation, policies: envelopes };
   }
@@ -393,6 +405,7 @@ export class Client {
     policyId: string,
     inputData: JsonObject,
     applicationName: string,
+    configInput: JsonObject | null,
   ): Promise<JsonObject> {
     const base = this.realtimePolicyBaseUrl.replace(/\/+$/, '');
     const url = `${base}/api/v1/sdk/policies/${encodeURIComponent(policyId)}/evaluate`;
@@ -402,6 +415,9 @@ export class Client {
       json: {
         input_data: inputData,
         application_name: applicationName,
+        // Omitted entirely for bare models — the server treats a missing
+        // config_input as "use each policy rule's own configuration".
+        ...(configInput !== null ? { config_input: configInput } : {}),
       },
       errorMessage: 'Policy evaluation failed',
     });
