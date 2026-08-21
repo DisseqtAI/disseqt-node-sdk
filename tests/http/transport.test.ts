@@ -5,6 +5,7 @@ import {
   DisseqtHttpTransport,
   DisseqtJsonError,
   buildUrl,
+  sdkIdentityHeaders,
 } from '../../src/index.js';
 
 const jsonResponse = (body: unknown, init: ResponseInit = {}): Response =>
@@ -25,11 +26,13 @@ describe('DisseqtHttpTransport', () => {
     expect(transport.buildHeaders()).toEqual({
       'X-API-Key': 'api-key',
       'X-Project-Id': 'project-id',
+      ...sdkIdentityHeaders(),
       'Content-Type': 'application/json',
     });
     expect(transport.buildHeaders({ includeContentType: false })).toEqual({
       'X-API-Key': 'api-key',
       'X-Project-Id': 'project-id',
+      ...sdkIdentityHeaders(),
     });
   });
 
@@ -55,6 +58,7 @@ describe('DisseqtHttpTransport', () => {
         headers: {
           'X-API-Key': 'api-key',
           'X-Project-Id': 'project-id',
+          ...sdkIdentityHeaders(),
           'Content-Type': 'application/json',
         },
         body: '{"input_data":{"llm_input_query":"hello"}}',
@@ -195,6 +199,7 @@ describe('DisseqtHttpTransport', () => {
         headers: {
           'X-API-Key': 'api-key',
           'X-Project-Id': 'project-id',
+          ...sdkIdentityHeaders(),
         },
       }),
     );

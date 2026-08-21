@@ -1,6 +1,7 @@
 import { clearTimeout, setTimeout } from 'node:timers';
 
 import { DisseqtHttpError, DisseqtJsonError } from './errors.js';
+import { checkVersionNotice, sdkIdentityHeaders, versionBlockedError } from './versionNotice.js';
 import type {
   DisseqtAuthConfig,
   DisseqtRequestOptions,
@@ -39,6 +40,7 @@ export class DisseqtHttpTransport {
     const headers: Record<string, string> = {
       'X-API-Key': this.apiKey,
       'X-Project-Id': this.projectId,
+      ...sdkIdentityHeaders(),
     };
 
     if (includeContentType) {
@@ -108,7 +110,18 @@ export class DisseqtHttpTransport {
       const response = await this.fetcher(url, requestInit);
       const text = await response.text();
 
+      // Before the ok-check so error responses (426 included) still surface
+      // the warn-once upgrade notice the server stamped on the headers.
+      checkVersionNotice(response.headers);
+
       if (!response.ok) {
+        const blocked = versionBlockedError(response.status, response.headers, text, {
+          method: options.method,
+          url,
+        });
+        if (blocked !== undefined) {
+          throw blocked;
+        }
         throw new DisseqtHttpError(
           response.status,
           options.errorMessage ?? 'API request failed',

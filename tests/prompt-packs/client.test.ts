@@ -12,6 +12,7 @@ import {
   PromptPackCategory,
   PromptPackOutputValidationCategory,
   PromptPackOutputValidationRequest,
+  sdkIdentityHeaders,
 } from '../../src/index.js';
 
 const PREFIX = `${PROMPT_PACKS_DEFAULT_BASE_URL}${PROMPT_PACKS_PATH_PREFIX}`;
@@ -70,6 +71,7 @@ describe('DisseqtAPIClient construction', () => {
     expect(client._buildHeaders()).toEqual({
       'X-API-Key': 'test_key_xyz',
       'X-Project-Id': 'test_project_123',
+      ...sdkIdentityHeaders(),
       'Content-Type': 'application/json',
     });
     expect(client._buildHeaders()).not.toHaveProperty('X-Request-Id');
@@ -103,6 +105,7 @@ describe('Prompt Packs generation and download', () => {
         headers: {
           'X-API-Key': 'test_key_xyz',
           'X-Project-Id': 'test_project_123',
+          ...sdkIdentityHeaders(),
           'Content-Type': 'application/json',
         },
       }),
@@ -144,6 +147,7 @@ describe('Prompt Packs generation and download', () => {
     expect(lastCall(fetcher)[1]?.headers).toEqual({
       'X-API-Key': 'key',
       'X-Project-Id': 'project',
+      ...sdkIdentityHeaders(),
     });
   });
 

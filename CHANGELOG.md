@@ -1,5 +1,33 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **SDK version notification** — every API call (validation, policy
+  evaluation, and prompt packs, via the shared HTTP transport) now
+  identifies the SDK with `X-SDK-Version`, `X-SDK-Lang: node`, and
+  `User-Agent: disseqt-node-sdk/<version>` request headers. When the
+  server advertises a newer release on the response
+  (`X-SDK-Latest-Version`, plus `X-SDK-Notice` below the supported
+  floor), the SDK emits one `console.warn` per process per advertised
+  version — fail-open (a malformed or missing header can never affect a
+  call), with zero extra network requests. Opt out of the warning with
+  `DISSEQT_SDK_DISABLE_VERSION_NOTICE=1` (the headers are still sent).
+  Mirrors `disseqt-ai-sdk` (Python) 0.8.0; `X-SDK-Lang` tells the
+  backend to compare against the Node release line, never the Python
+  one.
+- **`SDKVersionBlockedError`** — HTTP 426 (DSQ-4260, the version
+  enforcement tier: a permanent cutoff or a scheduled brownout
+  rehearsal) now rejects with this typed error instead of a generic
+  `DisseqtHttpError`. It extends `DisseqtHttpError`, so existing
+  handlers keep working; it carries `.latest`, `.notice`, and `.sunset`
+  (RFC 8594 cutoff date), and its message is the server's
+  self-explanatory refusal text. Named to match the Python SDK.
+- **`SDK_VERSION` / `SDK_LANGUAGE` / `USER_AGENT`** exported from the
+  package root; a drift-guard test pins `SDK_VERSION` to
+  `package.json`.
+
 ## 0.2.0
 
 ### Added
