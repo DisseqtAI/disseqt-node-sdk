@@ -9,7 +9,7 @@
  * `SDK_LANGUAGE` rides every request as `X-SDK-Lang` so the backend
  * compares this SDK against the Node release line, never the Python one.
  */
-export const SDK_VERSION = '0.2.0';
+export const SDK_VERSION = '0.3.0';
 
 export const SDK_LANGUAGE = 'node';
 
