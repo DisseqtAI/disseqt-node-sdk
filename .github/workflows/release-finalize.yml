@@ -1,0 +1,77 @@
+name: Release Finalize
+
+# Second half of the release flow (see release.yml): runs on every push to
+# main and finalizes a release exactly when the merged commit carries a
+# version that has no tag yet — i.e. a merged "Release vX.Y.Z" PR. It is
+# keyed on state, not commit messages: package.json version untagged AND
+# src/version.ts in lockstep → tag, GitHub release (notes = that version's
+# CHANGELOG section), and an explicit dispatch of publish.yml (a release
+# created with the default GITHUB_TOKEN does not fire other workflows'
+# release triggers; workflow_dispatch is the documented exception). Any
+# other push to main is a no-op, so this is safe and idempotent.
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: release-finalize
+  cancel-in-progress: false
+
+jobs:
+  finalize:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect an untagged release version
+        id: detect
+        run: |
+          set -euo pipefail
+          VERSION=$(python3 -c "import re; print(re.search(r'\"version\": \"(\d+\.\d+\.\d+)\"', open('package.json').read()).group(1))")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          if git rev-parse -q --verify "refs/tags/v$VERSION" >/dev/null; then
+            echo "release_needed=false" >> "$GITHUB_OUTPUT"
+            echo "v$VERSION already tagged — nothing to finalize."
+            exit 0
+          fi
+          if [ -f src/version.ts ] && ! grep -q "SDK_VERSION = '$VERSION'" src/version.ts; then
+            echo "release_needed=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::package.json is $VERSION but src/version.ts disagrees — not finalizing (the drift-guard test should have caught this)."
+            exit 0
+          fi
+          echo "release_needed=true" >> "$GITHUB_OUTPUT"
+          echo "Finalizing v$VERSION"
+
+      - name: Tag
+        if: steps.detect.outputs.release_needed == 'true'
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag "v${{ steps.detect.outputs.version }}"
+          git push origin "v${{ steps.detect.outputs.version }}"
+
+      - name: Create GitHub release
+        if: steps.detect.outputs.release_needed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python3 .github/scripts/prepare_release.py --notes-current > release_notes.md
+          gh release create "v${{ steps.detect.outputs.version }}" \
+            --target main \
+            --title "v${{ steps.detect.outputs.version }}" \
+            --notes-file release_notes.md
+
+      - name: Dispatch npm publish
+        if: steps.detect.outputs.release_needed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run publish.yml --ref main

@@ -24,9 +24,34 @@ import sys
 BUMPS = ("patch", "minor", "major")
 
 
+def notes_current() -> int:
+    """Print the CHANGELOG section for the version currently in package.json.
+
+    Used by release-finalize.yml after a release PR merges — no mutation.
+    """
+    text = pathlib.Path("package.json").read_text(encoding="utf-8")
+    match = re.search(r'^  "version": "(\d+\.\d+\.\d+)",$', text, flags=re.M)
+    if match is None:
+        print("package.json has no plain X.Y.Z version line", file=sys.stderr)
+        return 1
+    version = match.group(1)
+    log = pathlib.Path("CHANGELOG.md").read_text(encoding="utf-8")
+    heading = f"## {version}"
+    if heading not in log:
+        print("Maintenance release.")
+        return 0
+    tail = log.split(heading, 1)[1]
+    next_section = re.search(r"^## ", tail, flags=re.M)
+    notes = (tail[: next_section.start()] if next_section else tail).strip()
+    print(notes if notes else "Maintenance release.")
+    return 0
+
+
 def main() -> int:
+    if len(sys.argv) == 2 and sys.argv[1] == "--notes-current":
+        return notes_current()
     if len(sys.argv) != 2 or sys.argv[1] not in BUMPS:
-        print(f"usage: prepare_release.py <{'|'.join(BUMPS)}>", file=sys.stderr)
+        print(f"usage: prepare_release.py <{'|'.join(BUMPS)}|--notes-current>", file=sys.stderr)
         return 2
     bump = sys.argv[1]
 
