@@ -15,6 +15,7 @@ import {
   ThemesClassifierRequest,
   ValidatorDomain,
   buildValidatorUrl,
+  sdkIdentityHeaders,
 } from '../../src/index.js';
 
 const jsonResponse = (body: unknown, init: ResponseInit = {}): Response =>
@@ -58,6 +59,7 @@ describe('Client', () => {
     expect(client._buildHeaders()).toEqual({
       'X-API-Key': 'test_key_xyz',
       'X-Project-Id': 'test_project_123',
+      ...sdkIdentityHeaders(),
       'Content-Type': 'application/json',
     });
     expect(client._buildHeaders()).not.toHaveProperty('X-Request-Id');
@@ -98,6 +100,7 @@ describe('Client', () => {
         headers: {
           'X-API-Key': 'test_key_xyz',
           'X-Project-Id': 'test_project_123',
+          ...sdkIdentityHeaders(),
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
