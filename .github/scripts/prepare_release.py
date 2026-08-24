@@ -19,9 +19,57 @@ from __future__ import annotations
 
 import pathlib
 import re
+import subprocess
 import sys
 
 BUMPS = ("patch", "minor", "major")
+
+
+def current_version_is_tagged(current: str) -> bool:
+    """Refuse to bump past a version that was never released.
+
+    If package.json's version has no matching ``v<version>`` git tag,
+    someone hand-bumped it in a feature branch. Bumping again would skip
+    that number entirely (the python repo jumped 0.9.0 -> 0.11.0 exactly
+    this way on 2026-08-24). On this repo release-finalize.yml normally
+    self-heals a merged hand-bump by tagging and releasing it — so if
+    this guard fires, finalize most likely skipped it, e.g. because
+    src/version.ts was not bumped in lockstep (check that first).
+
+    Fail-open when git itself is unavailable or errors for environmental
+    reasons: the guard must never be the thing that breaks a release.
+    Only a definitive "tag does not exist" (git exit code 1) blocks.
+    """
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "-q", "--verify", f"refs/tags/v{current}"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except OSError as exc:
+        print(f"warning: tag check skipped (git unavailable: {exc})", file=sys.stderr)
+        return True
+    if result.returncode == 0:
+        return True
+    if result.returncode == 1:
+        print(
+            f"package.json is at {current}, but tag v{current} does not exist — "
+            "the version was hand-bumped without being released. Bumping again "
+            f"would silently skip {current}. Likely cause: release-finalize "
+            "skipped it because src/version.ts disagreed with package.json — "
+            f"fix the lockstep and merge, and finalize will release {current}; "
+            "or revert the hand-bump so the Release workflow owns the "
+            "numbering, then re-run. Reminder: feature branches should only "
+            "add Unreleased CHANGELOG entries — never touch the version.",
+            file=sys.stderr,
+        )
+        return False
+    print(
+        f"warning: tag check inconclusive (git exited {result.returncode}); continuing",
+        file=sys.stderr,
+    )
+    return True
 
 
 def notes_current() -> int:
@@ -62,6 +110,8 @@ def main() -> int:
         print("package.json has no plain X.Y.Z version line", file=sys.stderr)
         return 1
     major, minor, patch = (int(g) for g in match.groups())
+    if not current_version_is_tagged(f"{major}.{minor}.{patch}"):
+        return 1
     if bump == "major":
         major, minor, patch = major + 1, 0, 0
     elif bump == "minor":
