@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Added
+
+- `CreateRunRequest` (prompt packs) gained an optional `applicationId` /
+  `application_id` field. When set and none of `llm_id`/
+  `app_integration_id`/`custom_llm_id` is otherwise supplied, the backend
+  auto-resolves it to that Application's ("AI System") one linked
+  integration. Omitted from the request payload entirely when unset —
+  existing callers see no change on the wire.
+
 ## 0.3.0
 
 ### Added

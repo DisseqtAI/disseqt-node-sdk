@@ -145,6 +145,15 @@ export interface CreateRunRequestInit {
   modelName?: string;
   model_name?: string;
   provider: string;
+  /**
+   * Optional id of a registered Application ("AI System") to scope this run
+   * to. When set and none of llm_id/app_integration_id/custom_llm_id is
+   * otherwise supplied, the backend auto-resolves this to the Application's
+   * one linked integration. Omitted from the payload entirely when unset --
+   * existing callers see no change in the request body sent over the wire.
+   */
+  applicationId?: string;
+  application_id?: string;
 }
 
 export class CreateRunRequest {
@@ -153,12 +162,14 @@ export class CreateRunRequest {
   readonly apiKey: string;
   readonly modelName: string;
   readonly provider: string;
+  readonly applicationId?: string;
 
   constructor(input: CreateRunRequestInit) {
     const runName = input.runName ?? input.run_name;
     const runType = input.runType ?? input.run_type;
     const apiKey = input.apiKey ?? input.api_key;
     const modelName = input.modelName ?? input.model_name;
+    const applicationId = input.applicationId ?? input.application_id;
 
     if (runName === undefined) {
       throw new ValueError('run_name is required');
@@ -178,16 +189,26 @@ export class CreateRunRequest {
     this.apiKey = apiKey;
     this.modelName = modelName;
     this.provider = input.provider;
+    // exactOptionalPropertyTypes: assigning `string | undefined` to an
+    // optional `string` property is a type error even though the runtime
+    // effect is identical -- only assign when actually present.
+    if (applicationId !== undefined) {
+      this.applicationId = applicationId;
+    }
   }
 
   toPayload(): JsonObject {
-    return {
+    const payload: JsonObject = {
       run_name: this.runName,
       run_type: this.runType,
       api_key: this.apiKey,
       model_name: this.modelName,
       provider: this.provider,
     };
+    if (this.applicationId !== undefined) {
+      payload.application_id = this.applicationId;
+    }
+    return payload;
   }
 
   to_payload(): JsonObject {

@@ -90,6 +90,49 @@ describe('Prompt Packs models', () => {
     expect(request.toPayload()).not.toHaveProperty('organization_id');
   });
 
+  it('serializes create run requests without application_id when unset -- byte-identical to before the field existed', () => {
+    const request = new CreateRunRequest({
+      run_name: 'Test Run',
+      run_type: 'evaluation',
+      api_key: 'llm-api-key',
+      model_name: 'gpt-4',
+      provider: 'openai',
+    });
+
+    const payload = request.toPayload();
+    expect(payload).toEqual({
+      run_name: 'Test Run',
+      run_type: 'evaluation',
+      api_key: 'llm-api-key',
+      model_name: 'gpt-4',
+      provider: 'openai',
+    });
+    expect(payload).not.toHaveProperty('application_id');
+    expect(JSON.stringify(payload)).not.toContain('application_id');
+  });
+
+  it('includes application_id in the payload when set, accepting either spelling', () => {
+    const camelCase = new CreateRunRequest({
+      run_name: 'Test Run',
+      run_type: 'evaluation',
+      api_key: 'llm-api-key',
+      model_name: 'gpt-4',
+      provider: 'openai',
+      applicationId: 'app-123',
+    });
+    expect(camelCase.toPayload().application_id).toBe('app-123');
+
+    const snakeCase = new CreateRunRequest({
+      run_name: 'Test Run',
+      run_type: 'evaluation',
+      api_key: 'llm-api-key',
+      model_name: 'gpt-4',
+      provider: 'openai',
+      application_id: 'app-456',
+    });
+    expect(snakeCase.toPayload().application_id).toBe('app-456');
+  });
+
   it('serializes metric evaluations and output validation requests', () => {
     const metric = new MetricEvaluation({
       metricName: OutputValidationMetric.Toxicity,
