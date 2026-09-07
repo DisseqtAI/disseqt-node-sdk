@@ -138,7 +138,17 @@ export class GeneratePromptPackRequest {
 export interface CreateRunRequestInit {
   runName?: string;
   run_name?: string;
+  /**
+   * @deprecated Accepted for backward compatibility but NOT sent to the
+   * server: the backend's PromptPackRunRequest has never had a matching
+   * field (confirmed against its full git history back to the endpoint's
+   * first commit) and always computes its own run type server-side from
+   * whether specific prompts were selected. This does nothing today; kept
+   * so no existing caller breaks. Flagged for a future decision on
+   * formally removing it.
+   */
   runType?: string;
+  /** @deprecated see `runType`. */
   run_type?: string;
   apiKey?: string;
   api_key?: string;
@@ -198,9 +208,14 @@ export class CreateRunRequest {
   }
 
   toPayload(): JsonObject {
+    // run_name is sent as "prompt_pack_run_name" -- the only JSON key the
+    // backend's PromptPackRunRequest actually binds for a run's display
+    // name. "run_name" itself is never read server-side. run_type is
+    // omitted entirely: the backend has no matching field and always
+    // computes its own run type server-side (see the @deprecated notes on
+    // CreateRunRequestInit).
     const payload: JsonObject = {
-      run_name: this.runName,
-      run_type: this.runType,
+      prompt_pack_run_name: this.runName,
       api_key: this.apiKey,
       model_name: this.modelName,
       provider: this.provider,

@@ -71,6 +71,13 @@ describe('Prompt Packs models', () => {
   });
 
   it('serializes create run requests without project_id or organization_id', () => {
+    // run_name is sent as "prompt_pack_run_name" -- the only key the
+    // backend's PromptPackRunRequest actually binds for a run's display
+    // name; "run_name" itself must be ABSENT, the backend never reads it.
+    // run_type must also be ABSENT: the backend has no matching field at
+    // all and always computes its own run type server-side. run_type is
+    // still required as a *constructor* argument below (kept so no
+    // existing caller breaks) even though it reaches nothing on the wire.
     const request = new CreateRunRequest({
       run_name: 'Test Run',
       run_type: 'evaluation',
@@ -80,17 +87,44 @@ describe('Prompt Packs models', () => {
     });
 
     expect(request.toPayload()).toEqual({
+      prompt_pack_run_name: 'Test Run',
+      api_key: 'llm-api-key',
+      model_name: 'gpt-4',
+      provider: 'openai',
+    });
+    expect(request.toPayload()).not.toHaveProperty('run_name');
+    expect(request.toPayload()).not.toHaveProperty('run_type');
+    expect(request.toPayload()).not.toHaveProperty('project_id');
+    expect(request.toPayload()).not.toHaveProperty('organization_id');
+  });
+
+  it('load-bearing: run_name and run_type wire keys are genuinely absent, not merely unequal', () => {
+    // Proves the two keys the backend never binds are absent from both the
+    // object and its serialized form. A regression that re-adds either key
+    // under its wrong name would fail this even if every other assertion
+    // in this file kept passing.
+    const payload = new CreateRunRequest({
       run_name: 'Test Run',
       run_type: 'evaluation',
       api_key: 'llm-api-key',
       model_name: 'gpt-4',
       provider: 'openai',
-    });
-    expect(request.toPayload()).not.toHaveProperty('project_id');
-    expect(request.toPayload()).not.toHaveProperty('organization_id');
+    }).toPayload();
+    const serialized = JSON.stringify(payload);
+
+    expect(payload).not.toHaveProperty('run_name');
+    expect(serialized).not.toContain('"run_name"');
+    expect(payload).not.toHaveProperty('run_type');
+    expect(serialized).not.toContain('"run_type"');
   });
 
   it('serializes create run requests without application_id when unset -- byte-identical to before the field existed', () => {
+    // This is the CORRECTED expected payload (prompt_pack_run_name, no
+    // run_type) following the run_name/run_type wire-key fix -- rewritten
+    // deliberately to the new correct shape, not merely edited to match
+    // whatever toPayload() currently emits. It still asserts an exact key
+    // set: a regression that adds run_name/run_type back, or drops a real
+    // field, fails this equality check.
     const request = new CreateRunRequest({
       run_name: 'Test Run',
       run_type: 'evaluation',
@@ -101,8 +135,7 @@ describe('Prompt Packs models', () => {
 
     const payload = request.toPayload();
     expect(payload).toEqual({
-      run_name: 'Test Run',
-      run_type: 'evaluation',
+      prompt_pack_run_name: 'Test Run',
       api_key: 'llm-api-key',
       model_name: 'gpt-4',
       provider: 'openai',
