@@ -199,13 +199,17 @@ describe('Prompt Packs runs', () => {
       provider: 'openai',
     });
     expect(lastUrl(fetcher)).toBe(`${PREFIX}/pack-abc-123/runs`);
+    // Wire key is "prompt_pack_run_name" -- the only key the backend's
+    // PromptPackRunRequest actually binds for a run's display name.
+    // run_type is never sent -- the backend has no matching field.
     expect(lastBody(fetcher)).toEqual({
-      run_name: 'Test Run',
-      run_type: 'evaluation',
+      prompt_pack_run_name: 'Test Run',
       api_key: 'llm-api-key',
       model_name: 'gpt-4',
       provider: 'openai',
     });
+    expect(lastBody(fetcher)).not.toHaveProperty('run_name');
+    expect(lastBody(fetcher)).not.toHaveProperty('run_type');
 
     await client.listRuns('pack-abc-123', new PaginationParams({ limit: 25, offset: 50 }));
     expect(lastUrl(fetcher)).toBe(`${PREFIX}/pack-abc-123/runs?limit=25&offset=50`);

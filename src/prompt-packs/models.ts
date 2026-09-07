@@ -138,13 +138,32 @@ export class GeneratePromptPackRequest {
 export interface CreateRunRequestInit {
   runName?: string;
   run_name?: string;
+  /**
+   * @deprecated Accepted for backward compatibility but NOT sent to the
+   * server: the backend's PromptPackRunRequest has never had a matching
+   * field (confirmed against its full git history back to the endpoint's
+   * first commit) and always computes its own run type server-side from
+   * whether specific prompts were selected. This does nothing today; kept
+   * so no existing caller breaks. Flagged for a future decision on
+   * formally removing it.
+   */
   runType?: string;
+  /** @deprecated see `runType`. */
   run_type?: string;
   apiKey?: string;
   api_key?: string;
   modelName?: string;
   model_name?: string;
   provider: string;
+  /**
+   * Optional id of a registered Application ("AI System") to scope this run
+   * to. When set and none of llm_id/app_integration_id/custom_llm_id is
+   * otherwise supplied, the backend auto-resolves this to the Application's
+   * one linked integration. Omitted from the payload entirely when unset --
+   * existing callers see no change in the request body sent over the wire.
+   */
+  applicationId?: string;
+  application_id?: string;
 }
 
 export class CreateRunRequest {
@@ -153,12 +172,14 @@ export class CreateRunRequest {
   readonly apiKey: string;
   readonly modelName: string;
   readonly provider: string;
+  readonly applicationId?: string;
 
   constructor(input: CreateRunRequestInit) {
     const runName = input.runName ?? input.run_name;
     const runType = input.runType ?? input.run_type;
     const apiKey = input.apiKey ?? input.api_key;
     const modelName = input.modelName ?? input.model_name;
+    const applicationId = input.applicationId ?? input.application_id;
 
     if (runName === undefined) {
       throw new ValueError('run_name is required');
@@ -178,16 +199,31 @@ export class CreateRunRequest {
     this.apiKey = apiKey;
     this.modelName = modelName;
     this.provider = input.provider;
+    // exactOptionalPropertyTypes: assigning `string | undefined` to an
+    // optional `string` property is a type error even though the runtime
+    // effect is identical -- only assign when actually present.
+    if (applicationId !== undefined) {
+      this.applicationId = applicationId;
+    }
   }
 
   toPayload(): JsonObject {
-    return {
-      run_name: this.runName,
-      run_type: this.runType,
+    // run_name is sent as "prompt_pack_run_name" -- the only JSON key the
+    // backend's PromptPackRunRequest actually binds for a run's display
+    // name. "run_name" itself is never read server-side. run_type is
+    // omitted entirely: the backend has no matching field and always
+    // computes its own run type server-side (see the @deprecated notes on
+    // CreateRunRequestInit).
+    const payload: JsonObject = {
+      prompt_pack_run_name: this.runName,
       api_key: this.apiKey,
       model_name: this.modelName,
       provider: this.provider,
     };
+    if (this.applicationId !== undefined) {
+      payload.application_id = this.applicationId;
+    }
+    return payload;
   }
 
   to_payload(): JsonObject {

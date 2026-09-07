@@ -2,6 +2,38 @@
 
 ## Unreleased
 
+### Fixed
+
+- **`CreateRunRequest`'s `runName` now actually reaches the server.** Since
+  this SDK's first release, `toPayload()` sent the run name under the key
+  `"run_name"`, but the backend has only ever bound
+  `"prompt_pack_run_name"`. Every `runName` a caller supplied was silently
+  ignored — no error, no warning — and the backend fell back to its own
+  auto-generated name. If your runs have shown auto-generated names
+  regardless of what you passed as `runName`, this was why. **No code
+  change is required on your part** — the constructor argument is still
+  `runName`/`run_name`; only the wire key changed. Runs you create after
+  upgrading will use the name you actually give them. If anything of
+  yours (a dashboard, a script, a test) keys off the auto-generated name
+  pattern, expect that to change.
+- `CreateRunRequest`'s `runType` is no longer sent to the server. The
+  backend has never had a matching field — verified against its full git
+  history back to this endpoint's first commit — and always computes its
+  own run type server-side. This argument (now marked `@deprecated` in its
+  JSDoc) has done nothing since it was introduced; it remains a required
+  constructor argument so no existing caller breaks, but is now omitted
+  from the payload rather than sent as dead weight. No observable
+  behavior change from the caller's side of a successful call.
+
+### Added
+
+- `CreateRunRequest` (prompt packs) gained an optional `applicationId` /
+  `application_id` field. When set and none of `llm_id`/
+  `app_integration_id`/`custom_llm_id` is otherwise supplied, the backend
+  auto-resolves it to that Application's ("AI System") one linked
+  integration. Omitted from the request payload entirely when unset —
+  existing callers see no change on the wire.
+
 ## 0.3.0
 
 ### Added
