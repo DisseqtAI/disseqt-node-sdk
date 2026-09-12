@@ -1,6 +1,7 @@
 import { DisseqtHttpTransport, type DisseqtHttpTransportConfig } from '../http/index.js';
 import type { JsonObject } from '../http/types.js';
 import { ValidatorDomain } from './enums.js';
+import { BlockedError } from './errors.js';
 import {
   AgenticBehaviorHelpers,
   CompositeHelpers,
@@ -11,6 +12,7 @@ import {
   ThemesClassifierHelpers,
 } from './helpers.js';
 import { CompositeScoreRequest, ThemesClassifierRequest } from './models.js';
+import { anyBlocking, isAsync } from './policy.js';
 import { buildValidatorUrl } from './routes.js';
 import {
   isValidatable,
@@ -76,6 +78,17 @@ export interface ValidateOptions {
    * cannot be combined with policies.
    */
   policies?: readonly string[];
+}
+
+export interface ValidateSyncOptions extends ValidateOptions {
+  /**
+   * When true, `validateSync()` also throws `BlockedError` if any policy
+   * ran in async mode (`enforcement === "async"`) — useful for CI/CD gates
+   * that must have a final verdict in-band. Defaults to false: async
+   * policies are treated as non-blocking (they publish their final result
+   * to the Decisions dashboard later).
+   */
+  raiseOnAsync?: boolean;
 }
 
 /**
@@ -291,6 +304,42 @@ export class Client {
   }
 
   /**
+   * Sync-block wrapper around `validate()`: runs the same call and throws
+   * `BlockedError` when any policy verdict is BLOCK. Semantically identical
+   * to::
+   *
+   *     const result = await client.validate(req, { policies: [...] });
+   *     if (anyBlocking(result)) throw new BlockedError(...);
+   *     return result;
+   *
+   * — one line at every gate instead of that pattern repeated everywhere.
+   * With `raiseOnAsync: true`, also throws when any policy ran in async
+   * mode (no final verdict in this response). Mirrors the Python SDK's
+   * `validate_sync()`.
+   */
+  async validateSync(
+    request: Validatable | GenericValidationRequest | SupportsInputData,
+    options?: ValidateSyncOptions,
+  ): Promise<JsonObject> {
+    const result = await this.validate(request, options);
+    if (anyBlocking(result)) {
+      throw new BlockedError(
+        'realtime policy verdict is BLOCK — call blocked',
+        result,
+        'block',
+      );
+    }
+    if (options?.raiseOnAsync === true && isAnyAsync(result)) {
+      throw new BlockedError(
+        'realtime policy ran in async mode — no final verdict available in-band',
+        result,
+        'async',
+      );
+    }
+    return result;
+  }
+
+  /**
    * Orchestrate shape 2/3 of `validate()` (`{ policies: [...] }`).
    *
    * Every client-side rule is checked — and throws `ValueError` — BEFORE
@@ -464,6 +513,30 @@ function hasToInputData(value: unknown): value is SupportsInputData {
     'toInputData' in value &&
     typeof (value as { toInputData: unknown }).toInputData === 'function'
   );
+}
+
+/**
+ * True when at least one policy envelope in `result` ran in async mode.
+ * Handles all three shapes `anyBlocking` handles: the `{ validation,
+ * policies }` envelope, a bare array of policy envelopes, or a single
+ * envelope.
+ */
+function isAnyAsync(result: unknown): boolean {
+  if (result === null || typeof result !== 'object') {
+    return false;
+  }
+  const record = result as Record<string, unknown>;
+  if (Array.isArray(record['policies'])) {
+    return (record['policies'] as unknown[]).some(
+      (p) => typeof p === 'object' && p !== null && isAsync(p),
+    );
+  }
+  if (Array.isArray(result)) {
+    return (result as unknown[]).some(
+      (p) => typeof p === 'object' && p !== null && isAsync(p),
+    );
+  }
+  return isAsync(result);
 }
 
 function describeType(value: unknown): string {
