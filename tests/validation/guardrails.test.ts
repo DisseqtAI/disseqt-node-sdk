@@ -30,18 +30,14 @@ function envelope(decision: string, policyId: string): Record<string, unknown> {
   };
 }
 
-function makeClient(
-  routes: Record<string, string>,
-): { client: Client; calls: RecordedCall[] } {
+function makeClient(routes: Record<string, string>): { client: Client; calls: RecordedCall[] } {
   const calls: RecordedCall[] = [];
   const fetcher = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
     const url = String(input);
     calls.push({
       url,
       body:
-        init?.body === undefined
-          ? {}
-          : (JSON.parse(String(init.body)) as Record<string, unknown>),
+        init?.body === undefined ? {} : (JSON.parse(String(init.body)) as Record<string, unknown>),
     });
     for (const [policyId, decision] of Object.entries(routes)) {
       if (url.includes(policyId)) {

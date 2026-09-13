@@ -323,11 +323,7 @@ export class Client {
   ): Promise<JsonObject> {
     const result = await this.validate(request, options);
     if (anyBlocking(result)) {
-      throw new BlockedError(
-        'realtime policy verdict is BLOCK — call blocked',
-        result,
-        'block',
-      );
+      throw new BlockedError('realtime policy verdict is BLOCK — call blocked', result, 'block');
     }
     if (options?.raiseOnAsync === true && isAnyAsync(result)) {
       throw new BlockedError(
@@ -532,9 +528,7 @@ function isAnyAsync(result: unknown): boolean {
     );
   }
   if (Array.isArray(result)) {
-    return (result as unknown[]).some(
-      (p) => typeof p === 'object' && p !== null && isAsync(p),
-    );
+    return (result as unknown[]).some((p) => typeof p === 'object' && p !== null && isAsync(p));
   }
   return isAsync(result);
 }

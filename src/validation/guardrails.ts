@@ -144,11 +144,7 @@ export class Guardrails {
     const decisions = extractDecisions(raw);
     const result: GuardResult = { breached, decisions, raw, latencyMs };
     if (breached && options?.raiseOnBlock === true) {
-      throw new BlockedError(
-        'realtime policy guardrail breached — call blocked',
-        raw,
-        'block',
-      );
+      throw new BlockedError('realtime policy guardrail breached — call blocked', raw, 'block');
     }
     return result;
   }
