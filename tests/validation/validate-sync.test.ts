@@ -75,6 +75,8 @@ describe('Client.validateSync', () => {
       const blocked = error as BlockedError;
       expect(blocked.response).toBeTypeOf('object');
       expect((blocked.response as { policies: unknown[] }).policies).toHaveLength(1);
+      // Python-SDK parity: `.result` mirrors `.response`.
+      expect(blocked.result).toBe(blocked.response);
     }
   });
 

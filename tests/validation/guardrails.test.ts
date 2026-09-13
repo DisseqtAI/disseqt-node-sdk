@@ -115,6 +115,36 @@ describe('Guardrails', () => {
     expect(result.breached).toBe(false);
   });
 
+  it('GuardResult exposes Python-parity field aliases (PASS)', async () => {
+    const { client } = makeClient({ [INPUT_POLICY]: DECISION_PASS });
+    const gr = new Guardrails({ client, inputGuards: [INPUT_POLICY] });
+    const result = await gr.guardInput({ prompt: 'hi' });
+    // Node primary names still work…
+    expect(result.breached).toBe(false);
+    expect(result.decisions).toHaveLength(1);
+    // …and Python-flavored aliases mirror them.
+    expect(result.blocked).toBe(false);
+    expect(result.blocked).toBe(result.breached);
+    expect(result.policy_envelopes).toBe(result.decisions);
+  });
+
+  it('GuardResult exposes Python-parity field aliases (BLOCK)', async () => {
+    const { client } = makeClient({ [INPUT_POLICY]: DECISION_BLOCK });
+    const gr = new Guardrails({ client, inputGuards: [INPUT_POLICY] });
+    const result = await gr.guardInput({ prompt: 'attack' });
+    expect(result.breached).toBe(true);
+    expect(result.blocked).toBe(true);
+    expect(result.policy_envelopes[0]?.decision).toBe(DECISION_BLOCK);
+  });
+
+  it('vacuous GuardResult also carries snake_case aliases', async () => {
+    const { client } = makeClient({});
+    const gr = new Guardrails({ client });
+    const result = await gr.guardInput({ prompt: 'hi' });
+    expect(result.blocked).toBe(false);
+    expect(result.policy_envelopes).toEqual([]);
+  });
+
   it('rejects blank guard ids at construction', () => {
     const { client } = makeClient({});
     expect(() => new Guardrails({ client, inputGuards: ['  '] })).toThrow(/non-blank strings/);
