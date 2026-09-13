@@ -43,6 +43,20 @@ export interface GuardrailsConfig {
   inputGuards?: readonly string[];
   /** Policy ids applied to `guardOutput()`. */
   outputGuards?: readonly string[];
+  /**
+   * Reserved for wire-forward parity with the Python SDK and DeepTeam.
+   * Not consumed client-side — policy-level judge-model selection is a
+   * server-side RuntimePolicy attribute. Kept so the ctor kwarg list
+   * matches Python's `Guardrails(evaluation_model=..., sample_rate=...)`.
+   */
+  evaluationModel?: string;
+  /**
+   * Reserved for wire-forward parity with the Python SDK. Server-side
+   * sampling is enforced by `policyeval.Strategy.SampleRate` in
+   * llm-monitoring (Phase 2c, commit 9ad688d) — this client-side value is
+   * carried on the instance for observability/logging only.
+   */
+  sampleRate?: number;
 }
 
 /** Structured verdict returned by `guardInput` / `guardOutput`. */
@@ -79,11 +93,23 @@ export class Guardrails {
   private readonly client: Client;
   private readonly inputGuards: readonly string[];
   private readonly outputGuards: readonly string[];
+  /** Reserved parity kwarg — see {@link GuardrailsConfig.evaluationModel}. */
+  readonly evaluationModel: string;
+  /** Reserved parity kwarg — see {@link GuardrailsConfig.sampleRate}. */
+  readonly sampleRate: number;
 
   constructor(config: GuardrailsConfig) {
     this.client = config.client;
     this.inputGuards = normalize(config.inputGuards);
     this.outputGuards = normalize(config.outputGuards);
+    this.evaluationModel = config.evaluationModel ?? 'gpt-4.1';
+    const rate = config.sampleRate ?? 1.0;
+    if (!Number.isFinite(rate) || rate <= 0 || rate > 1) {
+      throw new ValueError(
+        `sampleRate must be a number in (0, 1] (got ${JSON.stringify(config.sampleRate)})`,
+      );
+    }
+    this.sampleRate = rate;
   }
 
   /**

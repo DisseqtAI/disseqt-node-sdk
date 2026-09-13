@@ -119,4 +119,68 @@ describe('Guardrails', () => {
     const { client } = makeClient({});
     expect(() => new Guardrails({ client, inputGuards: ['  '] })).toThrow(/non-blank strings/);
   });
+
+  it('carries evaluationModel + sampleRate parity kwargs (default gpt-4.1 / 1.0)', () => {
+    const { client } = makeClient({});
+    const gr = new Guardrails({ client });
+    expect(gr.evaluationModel).toBe('gpt-4.1');
+    expect(gr.sampleRate).toBe(1.0);
+  });
+
+  it('accepts custom evaluationModel + sampleRate', () => {
+    const { client } = makeClient({});
+    const gr = new Guardrails({
+      client,
+      evaluationModel: 'gpt-4o-mini',
+      sampleRate: 0.25,
+    });
+    expect(gr.evaluationModel).toBe('gpt-4o-mini');
+    expect(gr.sampleRate).toBe(0.25);
+  });
+
+  it('rejects sampleRate outside (0, 1]', () => {
+    const { client } = makeClient({});
+    expect(() => new Guardrails({ client, sampleRate: 0 })).toThrow(/sampleRate/);
+    expect(() => new Guardrails({ client, sampleRate: 1.5 })).toThrow(/sampleRate/);
+    expect(() => new Guardrails({ client, sampleRate: Number.NaN })).toThrow(/sampleRate/);
+  });
+
+  it('propagates upstream 5xx as DisseqtHttpError (not BlockedError)', async () => {
+    // Server error must surface intact — guardrails do not swallow it into a
+    // fake PASS. Callers need to see 500s to page on-call, not silently
+    // proceed thinking their content passed policy.
+    const fetcher = vi.fn(
+      async () => new Response('boom', { status: 500, headers: { 'Content-Type': 'text/plain' } }),
+    );
+    const client = new Client({
+      projectId: 'p',
+      apiKey: 'k',
+      applicationName: 'test-app',
+      fetch: fetcher,
+    });
+    const gr = new Guardrails({ client, inputGuards: [INPUT_POLICY] });
+    await expect(gr.guardInput({ prompt: 'hi' })).rejects.toMatchObject({ statusCode: 500 });
+    await expect(gr.guardInput({ prompt: 'hi' })).rejects.not.toBeInstanceOf(BlockedError);
+  });
+
+  it('propagates malformed JSON as DisseqtJsonError (not silent PASS)', async () => {
+    // A truncated / non-JSON body must NOT be swallowed into a vacuous PASS
+    // — a broken upstream must fail loud, not fail-open.
+    const fetcher = vi.fn(
+      async () =>
+        new Response('not-json-at-all{', {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+    );
+    const client = new Client({
+      projectId: 'p',
+      apiKey: 'k',
+      applicationName: 'test-app',
+      fetch: fetcher,
+    });
+    const gr = new Guardrails({ client, inputGuards: [INPUT_POLICY] });
+    await expect(gr.guardInput({ prompt: 'hi' })).rejects.toThrow();
+    await expect(gr.guardInput({ prompt: 'hi' })).rejects.not.toBeInstanceOf(BlockedError);
+  });
 });

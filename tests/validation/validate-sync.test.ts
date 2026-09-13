@@ -110,4 +110,48 @@ describe('Client.validateSync', () => {
       expect((error as BlockedError).reason).toBe('block');
     }
   });
+
+  it('propagates upstream 5xx as DisseqtHttpError (not BlockedError)', async () => {
+    // A dead policy service must surface as an HTTP error — not get silently
+    // reshaped into a fake "block" or "pass" verdict.
+    const fetcher = vi.fn(
+      async () => new Response('boom', { status: 500, headers: { 'Content-Type': 'text/plain' } }),
+    );
+    const client = new Client({
+      projectId: 'p',
+      apiKey: 'k',
+      applicationName: 'test-app',
+      fetch: fetcher,
+    });
+    await expect(
+      client.validateSync(new InputValidationRequest({ prompt: 'hi' }), { policies: [POLICY_ID] }),
+    ).rejects.toMatchObject({ statusCode: 500 });
+    await expect(
+      client.validateSync(new InputValidationRequest({ prompt: 'hi' }), { policies: [POLICY_ID] }),
+    ).rejects.not.toBeInstanceOf(BlockedError);
+  });
+
+  it('propagates malformed JSON as parse error (not silent PASS)', async () => {
+    // Corrupt envelope must not degrade to a vacuous PASS — the sync gate
+    // has to fail loud so CI/prod callers see it.
+    const fetcher = vi.fn(
+      async () =>
+        new Response('not-json-at-all{', {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+    );
+    const client = new Client({
+      projectId: 'p',
+      apiKey: 'k',
+      applicationName: 'test-app',
+      fetch: fetcher,
+    });
+    await expect(
+      client.validateSync(new InputValidationRequest({ prompt: 'hi' }), { policies: [POLICY_ID] }),
+    ).rejects.toThrow();
+    await expect(
+      client.validateSync(new InputValidationRequest({ prompt: 'hi' }), { policies: [POLICY_ID] }),
+    ).rejects.not.toBeInstanceOf(BlockedError);
+  });
 });
