@@ -22,4 +22,9 @@ export class BlockedError extends Error {
     this.response = response;
     this.reason = reason;
   }
+
+  /** Python-SDK parity alias — mirrors `.response`. */
+  get result(): unknown {
+    return this.response;
+  }
 }

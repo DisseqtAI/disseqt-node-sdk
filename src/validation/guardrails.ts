@@ -76,6 +76,10 @@ export interface GuardResult {
    * milliseconds. Useful for SLO dashboards on the guard fan-out itself.
    */
   readonly latencyMs: number;
+  /** Python-SDK parity alias — mirrors `breached`. */
+  readonly blocked: boolean;
+  /** Python-SDK parity alias — mirrors `decisions`. */
+  readonly policy_envelopes: readonly PolicyDecision[];
 }
 
 export interface GuardInputOptions {
@@ -168,7 +172,14 @@ export class Guardrails {
     const latencyMs = Math.round(performanceNow() - started);
     const breached = anyBlocking(raw);
     const decisions = extractDecisions(raw);
-    const result: GuardResult = { breached, decisions, raw, latencyMs };
+    const result: GuardResult = {
+      breached,
+      decisions,
+      raw,
+      latencyMs,
+      blocked: breached,
+      policy_envelopes: decisions,
+    };
     if (breached && options?.raiseOnBlock === true) {
       throw new BlockedError('realtime policy guardrail breached — call blocked', raw, 'block');
     }
@@ -209,6 +220,8 @@ function vacuous(): GuardResult {
     decisions: [],
     raw: { validation: null, policies: [] },
     latencyMs: 0,
+    blocked: false,
+    policy_envelopes: [],
   };
 }
 
