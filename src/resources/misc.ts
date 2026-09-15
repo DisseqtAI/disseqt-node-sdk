@@ -6,7 +6,7 @@ import { ResourceBase } from './base.js';
 
 /** RAG target integrations. */
 export class RagTargetsClient extends ResourceBase {
-  private readonly root = '/api/v1/rag-integrations';
+  private readonly root = '/api/v1/llm/rag-integrations';
   list(params?: QueryParams): Promise<JsonObject> {
     return this._request('GET', this.root, params ? { params } : {});
   }
@@ -26,7 +26,7 @@ export class RagTargetsClient extends ResourceBase {
 
 /** MCP target integrations. */
 export class McpTargetsClient extends ResourceBase {
-  private readonly root = '/api/v1/mcp-integrations';
+  private readonly root = '/api/v1/llm/mcp-integrations';
   list(params?: QueryParams): Promise<JsonObject> {
     return this._request('GET', this.root, params ? { params } : {});
   }
