@@ -43,6 +43,8 @@ describe('DisseqtResourceClient', () => {
     expect(client.mcpTargets).toBeDefined();
     expect(client.vulnerabilities).toBeDefined();
     expect(client.mr).toBeDefined();
+    expect(client.plans).toBeDefined();
+    expect(client.planRuns).toBeDefined();
   });
 
   it('sends X-API-Key + X-Project-Id headers', async () => {
@@ -188,5 +190,95 @@ describe('Bonus resource clients', () => {
     expect(lastCall(fetcher)[0]).toContain('/api/v1/vulnerabilities');
     await client.mr.list();
     expect(lastCall(fetcher)[0]).toContain('/api/v1/mr');
+  });
+});
+
+describe('PlansClient', () => {
+  it('list hits /api/v1/test-plans', async () => {
+    const { client, fetcher } = makeClient();
+    await client.plans.list();
+    expect(lastCall(fetcher)[0]).toBe(`${RESOURCES_DEFAULT_BASE_URL}/api/v1/test-plans`);
+  });
+  it('gallery + list-deleted + options', async () => {
+    const { client, fetcher } = makeClient();
+    await client.plans.gallery();
+    expect(lastCall(fetcher)[0]).toContain('/api/v1/test-plans/gallery');
+    await client.plans.listDeleted();
+    expect(lastCall(fetcher)[0]).toContain('/api/v1/test-plans/deleted');
+    await client.plans.options('categories');
+    expect(lastCall(fetcher)[0]).toContain('/api/v1/test-plans/options/categories');
+  });
+  it('get / summary / update / delete / restore / copy', async () => {
+    const { client, fetcher } = makeClient();
+    await client.plans.get('p1');
+    expect(lastCall(fetcher)[0]).toContain('/api/v1/test-plans/p1');
+    await client.plans.summary('p1');
+    expect(lastCall(fetcher)[0]).toContain('/api/v1/test-plans/p1/summary');
+    await client.plans.update('p1', { name: 'n' });
+    expect(lastCall(fetcher)[1]?.method).toBe('PATCH');
+    await client.plans.delete('p1');
+    expect(lastCall(fetcher)[1]?.method).toBe('DELETE');
+    await client.plans.restore('p1');
+    expect(lastCall(fetcher)[0]).toContain('/api/v1/test-plans/p1/restore');
+    await client.plans.copy('p1');
+    expect(lastCall(fetcher)[0]).toContain('/api/v1/test-plans/p1/copy');
+  });
+  it('versions + create-version + publish + generate-inputs', async () => {
+    const { client, fetcher } = makeClient();
+    await client.plans.listVersions('p1');
+    expect(lastCall(fetcher)[0]).toContain('/api/v1/test-plans/p1/versions');
+    await client.plans.createVersion('p1', { recipe: {} });
+    expect(lastCall(fetcher)[1]?.method).toBe('POST');
+    await client.plans.publish('p1', {
+      sharing_scope: 'PROJECT',
+      expected_sharing_scope: 'PRIVATE',
+    });
+    expect(lastCall(fetcher)[0]).toContain('/api/v1/test-plans/p1/publish');
+    await client.plans.generateInputs({
+      app_description: 'x'.repeat(20),
+      subcategories: ['a'],
+      organization_id: 'o',
+    });
+    expect(lastCall(fetcher)[0]).toContain('/api/v1/test-plans/generate-inputs');
+    await client.plans.getGenerateInputsJob('j1');
+    expect(lastCall(fetcher)[0]).toContain('/api/v1/test-plans/generate-inputs/j1');
+  });
+});
+
+describe('PlanRunsClient', () => {
+  it('create is plan-scoped, get is run-scoped', async () => {
+    const { client, fetcher } = makeClient();
+    await client.planRuns.create('p1', {
+      target: { execution_mode: 'app_integration', app_integration_id: 'a1' },
+    });
+    expect(lastCall(fetcher)[0]).toContain('/api/v1/test-plans/p1/runs');
+    await client.planRuns.listForPlan('p1');
+    expect(lastCall(fetcher)[0]).toContain('/api/v1/test-plans/p1/runs');
+    await client.planRuns.listDeleted();
+    expect(lastCall(fetcher)[0]).toContain('/api/v1/test-plan-runs/deleted');
+    await client.planRuns.get('r1');
+    expect(lastCall(fetcher)[0]).toBe(`${RESOURCES_DEFAULT_BASE_URL}/api/v1/test-plan-runs/r1`);
+  });
+  it('stage / trace / report / prompts', async () => {
+    const { client, fetcher } = makeClient();
+    await client.planRuns.getStage('r1', 'baseline');
+    expect(lastCall(fetcher)[0]).toContain('/api/v1/test-plan-runs/r1/stages/baseline');
+    await client.planRuns.trace('r1', 'pr1');
+    expect(lastCall(fetcher)[0]).toContain('prompt_ref=pr1');
+    await client.planRuns.report('r1', { stage_key: 'baseline' });
+    expect(lastCall(fetcher)[0]).toContain('/api/v1/test-plan-runs/r1/report');
+    await client.planRuns.prompts('r1');
+    expect(lastCall(fetcher)[0]).toContain('/api/v1/test-plan-runs/r1/prompts');
+  });
+  it('cancel / delete / restore / reveal', async () => {
+    const { client, fetcher } = makeClient();
+    await client.planRuns.cancel('r1');
+    expect(lastCall(fetcher)[0]).toContain('/api/v1/test-plan-runs/r1/cancel');
+    await client.planRuns.delete('r1');
+    expect(lastCall(fetcher)[1]?.method).toBe('DELETE');
+    await client.planRuns.restore('r1');
+    expect(lastCall(fetcher)[0]).toContain('/api/v1/test-plan-runs/r1/restore');
+    await client.planRuns.reveal('r1', 'res1');
+    expect(lastCall(fetcher)[0]).toContain('/api/v1/test-plan-runs/r1/results/res1/reveal');
   });
 });

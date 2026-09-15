@@ -126,4 +126,38 @@ describe('disseqt CLI', () => {
     expect(result.code).toBe(0);
     expect(requests.at(-1)?.url).toBe('/api/v1/llm/custom-validators');
   });
+
+  it('lists test plans', async () => {
+    const result = await runCli(['plan', 'list', '--json']);
+    expect(result.code).toBe(0);
+    expect(requests.at(-1)?.url).toBe('/api/v1/test-plans');
+  });
+
+  it('publishes a plan with a body', async () => {
+    const body = '{"sharing_scope":"PROJECT","expected_sharing_scope":"PRIVATE"}';
+    const result = await runCli(['plan', 'publish', 'p1', '--body', body, '--json']);
+    expect(result.code).toBe(0);
+    expect(requests.at(-1)?.url).toBe('/api/v1/test-plans/p1/publish');
+    expect(JSON.parse(requests.at(-1)?.body ?? '{}').sharing_scope).toBe('PROJECT');
+  });
+
+  it('creates a plan-run against a plan id', async () => {
+    const body = '{"target":{"execution_mode":"app_integration","app_integration_id":"a1"}}';
+    const result = await runCli(['plan-run', 'create', 'p1', '--body', body, '--json']);
+    expect(result.code).toBe(0);
+    expect(requests.at(-1)?.url).toBe('/api/v1/test-plans/p1/runs');
+  });
+
+  it('traces a plan-run with prompt_ref', async () => {
+    const result = await runCli(['plan-run', 'trace', 'r1', '--prompt-ref', 'pr1', '--json']);
+    expect(result.code).toBe(0);
+    expect(requests.at(-1)?.url).toBe('/api/v1/test-plan-runs/r1/trace?prompt_ref=pr1');
+  });
+
+  it('cancels a plan-run', async () => {
+    const result = await runCli(['plan-run', 'cancel', 'r1', '--json']);
+    expect(result.code).toBe(0);
+    expect(requests.at(-1)?.method).toBe('POST');
+    expect(requests.at(-1)?.url).toBe('/api/v1/test-plan-runs/r1/cancel');
+  });
 });
