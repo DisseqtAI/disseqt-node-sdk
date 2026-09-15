@@ -183,9 +183,9 @@ describe('Bonus resource clients', () => {
   it('rag/mcp/vulnerabilities/mr hit expected roots', async () => {
     const { client, fetcher } = makeClient();
     await client.ragTargets.list();
-    expect(lastCall(fetcher)[0]).toContain('/api/v1/rag-integrations');
+    expect(lastCall(fetcher)[0]).toContain('/api/v1/llm/rag-integrations');
     await client.mcpTargets.list();
-    expect(lastCall(fetcher)[0]).toContain('/api/v1/mcp-integrations');
+    expect(lastCall(fetcher)[0]).toContain('/api/v1/llm/mcp-integrations');
     await client.vulnerabilities.list();
     expect(lastCall(fetcher)[0]).toContain('/api/v1/vulnerabilities');
     await client.mr.list();
