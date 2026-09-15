@@ -14,12 +14,13 @@ import {
   registerValidation,
   registerValidator,
 } from './commands.js';
+import { registerRedteam } from './commands/redteam.js';
 import { registerScan } from './scan.js';
 
 const program = new Command();
 program
   .name('disseqt')
-  .description('Disseqt CLI — targets, packs, runs, validations, sessions, scan')
+  .description('Disseqt CLI — targets, packs, runs, validations, sessions, scan, redteam')
   .version(SDK_VERSION);
 
 registerAuth(program);
@@ -34,6 +35,7 @@ registerBonus(program);
 registerScan(program);
 registerPlan(program);
 registerPlanRun(program);
+registerRedteam(program);
 
 program.parseAsync(process.argv).catch((error: unknown) => {
   const msg = error instanceof Error ? error.message : String(error);
