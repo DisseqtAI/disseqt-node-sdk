@@ -12,6 +12,7 @@ export default [
       '.claude/**',
       'eslint.config.js',
       'tsup.config.ts',
+      'tsup.cli.config.ts',
       'vitest.config.ts',
       'scripts/*.cjs',
     ],
@@ -23,6 +24,12 @@ export default [
       parser: tsParser,
       parserOptions: {
         project: './tsconfig.json',
+      },
+      globals: {
+        process: 'readonly',
+        Buffer: 'readonly',
+        setTimeout: 'readonly',
+        clearTimeout: 'readonly',
       },
     },
     plugins: {
