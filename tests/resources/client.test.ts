@@ -134,24 +134,24 @@ describe('RunsClient', () => {
 });
 
 describe('ValidationsClient', () => {
-  it('create routes under run, others under output-validations', async () => {
+  it('create routes under run, others under prompt-packs/output-validations', async () => {
     const { client, fetcher } = makeClient();
     await client.validations.create('r1', { validator: 'x' });
-    expect(lastCall(fetcher)[0]).toContain('/prompt-packs/runs/r1/validate-outputs');
+    expect(lastCall(fetcher)[0]).toContain('/api/v1/prompt-packs/runs/r1/validate-outputs');
     await client.validations.get('v1');
-    expect(lastCall(fetcher)[0]).toContain('/output-validations/v1');
+    expect(lastCall(fetcher)[0]).toContain('/api/v1/prompt-packs/output-validations/v1');
     await client.validations.cancel('v1');
-    expect(lastCall(fetcher)[0]).toContain('/output-validations/v1/cancel');
+    expect(lastCall(fetcher)[0]).toContain('/api/v1/prompt-packs/output-validations/v1/cancel');
   });
 });
 
 describe('RagValidationsClient', () => {
-  it('creates against a run and gets by id', async () => {
+  it('creates against a run and gets by id under prompt-packs/rag-validations', async () => {
     const { client, fetcher } = makeClient();
     await client.ragValidations.create('r1', {});
-    expect(lastCall(fetcher)[0]).toContain('/prompt-packs/runs/r1/rag-validate');
+    expect(lastCall(fetcher)[0]).toContain('/api/v1/prompt-packs/runs/r1/rag-validate');
     await client.ragValidations.get('rv1');
-    expect(lastCall(fetcher)[0]).toContain('/rag-validations/rv1');
+    expect(lastCall(fetcher)[0]).toContain('/api/v1/prompt-packs/rag-validations/rv1');
   });
 });
 

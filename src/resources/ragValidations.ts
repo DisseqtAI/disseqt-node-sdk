@@ -2,7 +2,7 @@ import type { JsonObject, JsonValue } from '../http/types.js';
 import { ResourceBase } from './base.js';
 
 const PACKS = '/api/v1/prompt-packs';
-const RV = '/api/v1/rag-validations';
+const RV = '/api/v1/prompt-packs/rag-validations';
 
 /** RAG-validations. */
 export class RagValidationsClient extends ResourceBase {

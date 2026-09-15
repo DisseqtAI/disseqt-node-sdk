@@ -2,7 +2,7 @@ import type { JsonObject, JsonValue, QueryParams } from '../http/types.js';
 import { ResourceBase } from './base.js';
 
 const PACKS = '/api/v1/prompt-packs';
-const OV = '/api/v1/output-validations';
+const OV = '/api/v1/prompt-packs/output-validations';
 
 /** Output-validations. */
 export class ValidationsClient extends ResourceBase {
