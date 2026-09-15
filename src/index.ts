@@ -1,5 +1,6 @@
 export * from './version.js';
 export * from './http/index.js';
+export * from './auth/index.js';
 export * from './validation/index.js';
 export * from './prompt-packs/index.js';
 export * from './agentic/index.js';

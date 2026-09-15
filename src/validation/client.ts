@@ -1,3 +1,4 @@
+import { resolveAuthSync } from '../auth/resolve.js';
 import { DisseqtHttpTransport, type DisseqtHttpTransportConfig } from '../http/index.js';
 import type { JsonObject } from '../http/types.js';
 import { ValidatorDomain } from './enums.js';
@@ -33,7 +34,11 @@ export interface SupportsInputData {
   toInputData(): JsonObject;
 }
 
-export interface ClientConfig extends DisseqtHttpTransportConfig {
+export interface ClientConfig extends Omit<DisseqtHttpTransportConfig, 'apiKey' | 'projectId'> {
+  /** Optional — falls back to `~/.disseqt/config.json` then `DISSEQT_API_KEY`. */
+  apiKey?: string;
+  /** Optional — falls back to `~/.disseqt/config.json` then `DISSEQT_PROJECT_ID`. */
+  projectId?: string;
   baseUrl?: string;
   timeout?: number;
   /**
@@ -188,8 +193,12 @@ export class Client {
         defaultPolicies = copied;
       }
     }
-    this.projectId = config.projectId;
-    this.apiKey = config.apiKey;
+    const overrides: Parameters<typeof resolveAuthSync>[0] = {};
+    if (config.apiKey !== undefined) overrides.apiKey = config.apiKey;
+    if (config.projectId !== undefined) overrides.projectId = config.projectId;
+    const resolved = resolveAuthSync(overrides);
+    this.projectId = resolved.projectId;
+    this.apiKey = resolved.apiKey;
     this.baseUrl = config.baseUrl ?? DEFAULT_BASE_URL;
     this.timeoutMs =
       config.timeoutMs ?? (config.timeout === undefined ? 30_000 : config.timeout * 1000);
