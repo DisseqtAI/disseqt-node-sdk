@@ -81,6 +81,7 @@
     "access": "public"
   },
   "devDependencies": {
+    "@types/js-yaml": "^4.0.9",
     "@types/node": "^22.10.2",
     "@typescript-eslint/eslint-plugin": "^8.18.1",
     "@typescript-eslint/parser": "^8.18.1",
@@ -101,6 +102,7 @@
     "esbuild": "^0.28.1"
   },
   "dependencies": {
-    "commander": "^13.1.0"
+    "commander": "^13.1.0",
+    "js-yaml": "^4.3.0"
   }
 }
