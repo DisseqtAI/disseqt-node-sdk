@@ -71,4 +71,20 @@ export class ResourceBase {
     if (options.params !== undefined) req.params = options.params;
     return this.transport.requestRaw(req);
   }
+
+  /**
+   * Request an endpoint that may return any JSON shape (array, object,
+   * primitive). Used by resources whose backend returns list literals
+   * (e.g. Python-parity `/attack-techniques`). Callers narrow the type.
+   */
+  protected async _requestAny(
+    method: HttpMethod,
+    path: string,
+    options: { json?: JsonValue; params?: QueryParams } = {},
+  ): Promise<unknown> {
+    const req: DisseqtRequestOptions = { method, url: this._url(path) };
+    if (options.json !== undefined) req.json = options.json;
+    if (options.params !== undefined) req.params = options.params;
+    return this.transport.requestJsonAny(req);
+  }
 }
