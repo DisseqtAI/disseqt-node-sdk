@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 
 import { SDK_VERSION } from '../version.js';
+import { registerAuth } from './auth.js';
 import {
   registerBonus,
   registerPack,
@@ -21,6 +22,7 @@ program
   .description('Disseqt CLI — targets, packs, runs, validations, sessions, scan')
   .version(SDK_VERSION);
 
+registerAuth(program);
 registerTarget(program);
 registerPack(program);
 registerRun(program);
