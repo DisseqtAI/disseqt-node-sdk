@@ -472,6 +472,24 @@ export function registerBonus(program: Command): void {
       );
     }),
   );
+  commonJson(
+    v
+      .command('test <id>')
+      .description('POST /api/v1/vulnerabilities/{id}/test — fire and forget')
+      .option('--target <spec>', 'target identifier (packaged into {"target": ...} body)')
+      .option('--body <json|file|->', 'raw JSON body (overrides --target)')
+      .action(async (id: string, opts: CommonOpts & { target?: string; body?: string }) => {
+        const body =
+          opts.body !== undefined
+            ? (readBody(opts.body) as never)
+            : opts.target !== undefined
+              ? ({ target: opts.target } as never)
+              : undefined;
+        await runAction(async () =>
+          emit(await buildClient().vulnerabilities.test(id, body), opts.json === true),
+        );
+      }),
+  );
 
   const mr = program.command('mr').description('multi-turn jailbreak (MR)');
   commonJson(
