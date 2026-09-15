@@ -4,6 +4,8 @@ import { SDK_VERSION } from '../version.js';
 import {
   registerBonus,
   registerPack,
+  registerPlan,
+  registerPlanRun,
   registerRagValidation,
   registerRun,
   registerSession,
@@ -28,6 +30,8 @@ registerSession(program);
 registerValidator(program);
 registerBonus(program);
 registerScan(program);
+registerPlan(program);
+registerPlanRun(program);
 
 program.parseAsync(process.argv).catch((error: unknown) => {
   const msg = error instanceof Error ? error.message : String(error);

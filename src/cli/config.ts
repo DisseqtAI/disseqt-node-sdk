@@ -75,6 +75,9 @@ export async function pollUntilTerminal<T extends Record<string, unknown>>(
   const deadline = Date.now() + (options.timeoutMs ?? 15 * 60 * 1000);
   const terminal = new Set([
     'completed',
+    // pkg/testplan/walk.go: a test-plan run may terminate with per-prompt
+    // execution failures but still finalize; that state is 'completed_with_errors'.
+    'completed_with_errors',
     'complete',
     'failed',
     'cancelled',

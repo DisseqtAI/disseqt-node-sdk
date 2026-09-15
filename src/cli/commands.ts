@@ -495,3 +495,270 @@ export function registerBonus(program: Command): void {
       }),
   );
 }
+
+/** plan group — Test Plans (T3). /api/v1/test-plans/... */
+export function registerPlan(program: Command): void {
+  const cmd = program.command('plan').description('test plans (T3)');
+
+  commonJson(
+    cmd.command('list').action(async (opts: CommonOpts) => {
+      await runAction(async () => emit(await buildClient().plans.list(), opts.json === true));
+    }),
+  );
+  commonJson(
+    cmd.command('gallery').action(async (opts: CommonOpts) => {
+      await runAction(async () => emit(await buildClient().plans.gallery(), opts.json === true));
+    }),
+  );
+  commonJson(
+    cmd.command('list-deleted').action(async (opts: CommonOpts) => {
+      await runAction(async () =>
+        emit(await buildClient().plans.listDeleted(), opts.json === true),
+      );
+    }),
+  );
+  commonJson(
+    cmd.command('options <ref>').action(async (ref: string, opts: CommonOpts) => {
+      await runAction(async () => emit(await buildClient().plans.options(ref), opts.json === true));
+    }),
+  );
+  commonJson(
+    cmd.command('get <id>').action(async (id: string, opts: CommonOpts) => {
+      await runAction(async () => emit(await buildClient().plans.get(id), opts.json === true));
+    }),
+  );
+  commonJson(
+    cmd.command('summary <id>').action(async (id: string, opts: CommonOpts) => {
+      await runAction(async () => emit(await buildClient().plans.summary(id), opts.json === true));
+    }),
+  );
+  commonJson(
+    cmd
+      .command('create')
+      .requiredOption('--body <json|file|->', 'request body')
+      .action(async (opts: CommonOpts & { body: string }) => {
+        await runAction(async () =>
+          emit(
+            await buildClient().plans.create(readBody(opts.body) as never),
+            opts.json === true,
+          ),
+        );
+      }),
+  );
+  commonJson(
+    cmd
+      .command('update <id>')
+      .requiredOption('--body <json|file|->', 'request body (must include expected_*_revision)')
+      .action(async (id: string, opts: CommonOpts & { body: string }) => {
+        await runAction(async () =>
+          emit(
+            await buildClient().plans.update(id, readBody(opts.body) as never),
+            opts.json === true,
+          ),
+        );
+      }),
+  );
+  commonJson(
+    cmd.command('delete <id>').action(async (id: string, opts: CommonOpts) => {
+      await runAction(async () => emit(await buildClient().plans.delete(id), opts.json === true));
+    }),
+  );
+  commonJson(
+    cmd.command('restore <id>').action(async (id: string, opts: CommonOpts) => {
+      await runAction(async () => emit(await buildClient().plans.restore(id), opts.json === true));
+    }),
+  );
+  commonJson(
+    cmd
+      .command('copy <id>')
+      .option('--body <json|file|->', 'optional copy body (e.g. {"name": "..."})')
+      .action(async (id: string, opts: CommonOpts & { body?: string }) => {
+        await runAction(async () =>
+          emit(
+            await buildClient().plans.copy(
+              id,
+              opts.body !== undefined ? (readBody(opts.body) as never) : undefined,
+            ),
+            opts.json === true,
+          ),
+        );
+      }),
+  );
+  commonJson(
+    cmd.command('versions <id>').action(async (id: string, opts: CommonOpts) => {
+      await runAction(async () =>
+        emit(await buildClient().plans.listVersions(id), opts.json === true),
+      );
+    }),
+  );
+  commonJson(
+    cmd
+      .command('create-version <id>')
+      .requiredOption('--body <json|file|->', 'recipe + optional copy_inputs_from_version')
+      .action(async (id: string, opts: CommonOpts & { body: string }) => {
+        await runAction(async () =>
+          emit(
+            await buildClient().plans.createVersion(id, readBody(opts.body) as never),
+            opts.json === true,
+          ),
+        );
+      }),
+  );
+  commonJson(
+    cmd
+      .command('publish <id>')
+      .requiredOption('--body <json|file|->', 'sharing_scope + expected_sharing_scope')
+      .action(async (id: string, opts: CommonOpts & { body: string }) => {
+        await runAction(async () =>
+          emit(
+            await buildClient().plans.publish(id, readBody(opts.body) as never),
+            opts.json === true,
+          ),
+        );
+      }),
+  );
+  commonJson(
+    cmd
+      .command('generate-inputs')
+      .requiredOption(
+        '--body <json|file|->',
+        'app_description + subcategories + organization_id',
+      )
+      .action(async (opts: CommonOpts & { body: string }) => {
+        await runAction(async () =>
+          emit(
+            await buildClient().plans.generateInputs(readBody(opts.body) as never),
+            opts.json === true,
+          ),
+        );
+      }),
+  );
+  commonJson(
+    cmd
+      .command('generate-inputs-status <jobId>')
+      .action(async (jobId: string, opts: CommonOpts) => {
+        await runAction(async () =>
+          emit(await buildClient().plans.getGenerateInputsJob(jobId), opts.json === true),
+        );
+      }),
+  );
+}
+
+/** plan-run group — Test Plan Runs (T6). /api/v1/test-plan-runs/... */
+export function registerPlanRun(program: Command): void {
+  const cmd = program.command('plan-run').description('test plan runs (T6)');
+
+  commonJson(
+    commonWait(
+      cmd
+        .command('create <planId>')
+        .requiredOption('--body <json|file|->', 'target + optional version_id')
+        .action(async (planId: string, opts: CommonOpts & { body: string }) => {
+          await runAction(async () => {
+            const c = buildClient();
+            const created = await c.planRuns.create(planId, readBody(opts.body) as never);
+            if (opts.wait !== true) {
+              emit(created, opts.json === true);
+              return;
+            }
+            const runId = String(created['run_id'] ?? '');
+            if (runId.length === 0) {
+              emit(created, opts.json === true);
+              return;
+            }
+            const final = await pollUntilTerminal(() => c.planRuns.get(runId));
+            emit(final, opts.json === true);
+          });
+        }),
+    ),
+  );
+  commonJson(
+    cmd.command('list <planId>').action(async (planId: string, opts: CommonOpts) => {
+      await runAction(async () =>
+        emit(await buildClient().planRuns.listForPlan(planId), opts.json === true),
+      );
+    }),
+  );
+  commonJson(
+    cmd.command('list-deleted').action(async (opts: CommonOpts) => {
+      await runAction(async () =>
+        emit(await buildClient().planRuns.listDeleted(), opts.json === true),
+      );
+    }),
+  );
+  commonJson(
+    cmd.command('get <runId>').action(async (runId: string, opts: CommonOpts) => {
+      await runAction(async () =>
+        emit(await buildClient().planRuns.get(runId), opts.json === true),
+      );
+    }),
+  );
+  commonJson(
+    cmd
+      .command('stage <runId> <stageKey>')
+      .action(async (runId: string, stageKey: string, opts: CommonOpts) => {
+        await runAction(async () =>
+          emit(await buildClient().planRuns.getStage(runId, stageKey), opts.json === true),
+        );
+      }),
+  );
+  commonJson(
+    cmd
+      .command('trace <runId>')
+      .requiredOption('--prompt-ref <ref>', 'prompt reference UUID')
+      .action(async (runId: string, opts: CommonOpts & { promptRef: string }) => {
+        await runAction(async () =>
+          emit(await buildClient().planRuns.trace(runId, opts.promptRef), opts.json === true),
+        );
+      }),
+  );
+  commonJson(
+    cmd
+      .command('report <runId>')
+      .option('--stage-key <key>', 'required by backend for results page')
+      .action(async (runId: string, opts: CommonOpts & { stageKey?: string }) => {
+        await runAction(async () => {
+          const params =
+            opts.stageKey !== undefined ? { stage_key: opts.stageKey } : undefined;
+          emit(await buildClient().planRuns.report(runId, params), opts.json === true);
+        });
+      }),
+  );
+  commonJson(
+    cmd.command('prompts <runId>').action(async (runId: string, opts: CommonOpts) => {
+      await runAction(async () =>
+        emit(await buildClient().planRuns.prompts(runId), opts.json === true),
+      );
+    }),
+  );
+  commonJson(
+    cmd.command('cancel <runId>').action(async (runId: string, opts: CommonOpts) => {
+      await runAction(async () =>
+        emit(await buildClient().planRuns.cancel(runId), opts.json === true),
+      );
+    }),
+  );
+  commonJson(
+    cmd.command('delete <runId>').action(async (runId: string, opts: CommonOpts) => {
+      await runAction(async () =>
+        emit(await buildClient().planRuns.delete(runId), opts.json === true),
+      );
+    }),
+  );
+  commonJson(
+    cmd.command('restore <runId>').action(async (runId: string, opts: CommonOpts) => {
+      await runAction(async () =>
+        emit(await buildClient().planRuns.restore(runId), opts.json === true),
+      );
+    }),
+  );
+  commonJson(
+    cmd
+      .command('reveal <runId> <resultId>')
+      .action(async (runId: string, resultId: string, opts: CommonOpts) => {
+        await runAction(async () =>
+          emit(await buildClient().planRuns.reveal(runId, resultId), opts.json === true),
+        );
+      }),
+  );
+}
