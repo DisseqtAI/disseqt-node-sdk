@@ -11,6 +11,7 @@ import { PacksClient } from './packs.js';
 import { PlanRunsClient } from './planRuns.js';
 import { PlansClient } from './plans.js';
 import { RagValidationsClient } from './ragValidations.js';
+import { RedteamClient } from './redteam.js';
 import { RESOURCES_DEFAULT_BASE_URL, type ResourceClientConfig } from './base.js';
 import { RunsClient } from './runs.js';
 import { SessionsClient } from './sessions.js';
@@ -56,6 +57,7 @@ export class DisseqtResourceClient {
   readonly mr: MultiTurnClient;
   readonly plans: PlansClient;
   readonly planRuns: PlanRunsClient;
+  readonly redteam: RedteamClient;
 
   constructor(config: DisseqtResourceClientConfig = {}) {
     const overrides: Parameters<typeof resolveAuthSync>[0] = {};
@@ -89,5 +91,6 @@ export class DisseqtResourceClient {
     this.mr = new MultiTurnClient(shared);
     this.plans = new PlansClient(shared);
     this.planRuns = new PlanRunsClient(shared);
+    this.redteam = new RedteamClient(shared);
   }
 }

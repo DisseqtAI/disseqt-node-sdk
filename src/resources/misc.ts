@@ -53,6 +53,22 @@ export class VulnerabilitiesClient extends ResourceBase {
   get(id: string): Promise<JsonObject> {
     return this._request('GET', `${this.root}/${id}`);
   }
+  /** POST /api/v1/vulnerabilities/{id}/test — fire-and-forget. */
+  test(id: string, payload?: JsonValue): Promise<JsonObject> {
+    return this._request(
+      'POST',
+      `${this.root}/${id}/test`,
+      payload !== undefined ? { json: payload } : {},
+    );
+  }
+  /** POST /api/v1/vulnerabilities/{id}/test/poll — blocks until scored. */
+  testPoll(id: string, payload?: JsonValue): Promise<JsonObject> {
+    return this._request(
+      'POST',
+      `${this.root}/${id}/test/poll`,
+      payload !== undefined ? { json: payload } : {},
+    );
+  }
 }
 
 /** Multi-turn jailbreak (MR) sessions. */

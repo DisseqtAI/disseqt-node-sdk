@@ -85,9 +85,33 @@ export class DisseqtHttpTransport {
     }
   }
 
+  /**
+   * Parse arbitrary JSON (objects, arrays, primitives). Used by resource
+   * clients that hit endpoints returning arrays, e.g. `/attack-techniques`
+   * or `/mr-jailbreak/agents`. `requestJson` remains the strict path.
+   */
+  async requestJsonAny(options: DisseqtRequestOptions): Promise<unknown> {
+    const response = await this.requestRaw(options);
+    if (response.status === 204) return null;
+    if (response.text.length === 0) return null;
+    try {
+      return JSON.parse(response.text);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new DisseqtJsonError(
+        `Failed to decode JSON response: ${message}. Response text: ${response.text.slice(0, 200)}`,
+        response.text,
+        { cause: error },
+      );
+    }
+  }
+
   async requestRaw(options: DisseqtRequestOptions): Promise<RawResponse> {
     const url = buildUrl(options.url, options.params);
-    const includeContentType = options.includeContentType ?? options.json !== undefined;
+    // Raw body (FormData/Blob) skips application/json — fetch supplies the
+    // right Content-Type + boundary itself.
+    const defaultIncludeCT = options.body === undefined && options.json !== undefined;
+    const includeContentType = options.includeContentType ?? defaultIncludeCT;
     const headers = {
       ...this.buildHeaders({ includeContentType }),
       ...options.headers,
@@ -103,7 +127,9 @@ export class DisseqtHttpTransport {
         signal,
       };
 
-      if (options.json !== undefined) {
+      if (options.body !== undefined) {
+        requestInit.body = options.body;
+      } else if (options.json !== undefined) {
         requestInit.body = JSON.stringify(options.json);
       }
 
