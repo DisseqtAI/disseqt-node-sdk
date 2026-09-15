@@ -7,6 +7,8 @@ import {
   VulnerabilitiesClient,
 } from './misc.js';
 import { PacksClient } from './packs.js';
+import { PlanRunsClient } from './planRuns.js';
+import { PlansClient } from './plans.js';
 import { RagValidationsClient } from './ragValidations.js';
 import { RESOURCES_DEFAULT_BASE_URL, type ResourceClientConfig } from './base.js';
 import { RunsClient } from './runs.js';
@@ -38,6 +40,8 @@ export class DisseqtResourceClient {
   readonly mcpTargets: McpTargetsClient;
   readonly vulnerabilities: VulnerabilitiesClient;
   readonly mr: MultiTurnClient;
+  readonly plans: PlansClient;
+  readonly planRuns: PlanRunsClient;
 
   constructor(config: DisseqtResourceClientConfig) {
     this.baseUrl = (config.baseUrl ?? RESOURCES_DEFAULT_BASE_URL).replace(/\/+$/, '');
@@ -64,5 +68,7 @@ export class DisseqtResourceClient {
     this.mcpTargets = new McpTargetsClient(shared);
     this.vulnerabilities = new VulnerabilitiesClient(shared);
     this.mr = new MultiTurnClient(shared);
+    this.plans = new PlansClient(shared);
+    this.planRuns = new PlanRunsClient(shared);
   }
 }
