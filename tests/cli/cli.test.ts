@@ -63,13 +63,25 @@ describe('disseqt CLI', () => {
     expect(result.stdout).toContain('run');
   });
 
-  it('exits 2 when auth env vars are missing', async () => {
-    const result = await runCli(['target', 'list'], {
-      DISSEQT_API_KEY: '',
-      DISSEQT_PROJECT_ID: '',
-    });
-    expect(result.code).toBe(2);
-    expect(result.stderr).toMatch(/DISSEQT_API_KEY|DISSEQT_PROJECT_ID/);
+  it('exits 2 when neither env vars nor login-config are available', async () => {
+    // Point DISSEQT_CONFIG_HOME at an empty tmp dir so the resolver can't
+    // find a stored auth blob — otherwise a prior `disseqt login` on the
+    // developer's machine would satisfy the resolver and mask the failure.
+    const { mkdtempSync, rmSync } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const { join } = await import('node:path');
+    const home = mkdtempSync(join(tmpdir(), 'disseqt-cli-empty-'));
+    try {
+      const result = await runCli(['target', 'list'], {
+        DISSEQT_API_KEY: '',
+        DISSEQT_PROJECT_ID: '',
+        DISSEQT_CONFIG_HOME: home,
+      });
+      expect(result.code).toBe(2);
+      expect(result.stderr).toMatch(/DISSEQT_API_KEY|disseqt login/);
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
   });
 
   it('lists targets against a mocked backend', async () => {
