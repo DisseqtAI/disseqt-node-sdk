@@ -1,32 +1,29 @@
-import { DisseqtResourceClient } from '../resources/index.js';
+import { AuthMissingError } from '../auth/errors.js';
 import { DisseqtHttpError } from '../http/errors.js';
+import { DisseqtResourceClient } from '../resources/index.js';
 
 export const EXIT_OK = 0;
 export const EXIT_FAILED = 1;
 export const EXIT_USAGE = 2;
 
 /**
- * Env-var-only config. Do NOT invent a `disseqt login` — the SDK contract
- * is `DISSEQT_PROJECT_ID` + `DISSEQT_API_KEY`, matching Python and CI setups.
+ * Resolve credentials via `DisseqtResourceClient`'s built-in chain
+ * (constructor args → `~/.disseqt/config.json` → `DISSEQT_*` env vars).
+ * The two env vars used to be required here; keeping them explicit for
+ * back-compat with existing CI setups that only export env vars.
  */
 export function buildClient(): DisseqtResourceClient {
-  const apiKey = process.env['DISSEQT_API_KEY'];
-  const projectId = process.env['DISSEQT_PROJECT_ID'];
-  const baseUrl = process.env['DISSEQT_BASE_URL'];
-
-  if (apiKey === undefined || apiKey.trim().length === 0) {
-    process.stderr.write('error: DISSEQT_API_KEY is not set\n');
-    process.exit(EXIT_USAGE);
+  try {
+    return new DisseqtResourceClient({});
+  } catch (error) {
+    if (error instanceof AuthMissingError) {
+      process.stderr.write(
+        'error: DISSEQT_API_KEY / DISSEQT_PROJECT_ID not set and no ~/.disseqt/config.json — run `disseqt login`\n',
+      );
+      process.exit(EXIT_USAGE);
+    }
+    throw error;
   }
-  if (projectId === undefined || projectId.trim().length === 0) {
-    process.stderr.write('error: DISSEQT_PROJECT_ID is not set\n');
-    process.exit(EXIT_USAGE);
-  }
-  const cfg: ConstructorParameters<typeof DisseqtResourceClient>[0] = { apiKey, projectId };
-  if (baseUrl !== undefined && baseUrl.trim().length > 0) {
-    cfg.baseUrl = baseUrl;
-  }
-  return new DisseqtResourceClient(cfg);
 }
 
 /** Print + exit helper used by every command. */
