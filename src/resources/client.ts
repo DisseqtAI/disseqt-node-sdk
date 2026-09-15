@@ -1,3 +1,4 @@
+import { resolveAuthSync } from '../auth/resolve.js';
 import { DisseqtHttpTransport, type DisseqtHttpTransportConfig } from '../http/index.js';
 import { CustomValidatorsClient } from './customValidators.js';
 import {
@@ -16,7 +17,20 @@ import { SessionsClient } from './sessions.js';
 import { TargetsClient } from './targets.js';
 import { ValidationsClient } from './validations.js';
 
-export type DisseqtResourceClientConfig = ResourceClientConfig;
+/**
+ * Constructor config for `DisseqtResourceClient`. `apiKey` / `projectId`
+ * are optional — when omitted, they resolve from `~/.disseqt/config.json`
+ * (written by `disseqt login`) and then from `DISSEQT_API_KEY` /
+ * `DISSEQT_PROJECT_ID`. `AuthMissingError` fires only when every source
+ * comes up empty.
+ */
+export type DisseqtResourceClientConfig = Omit<
+  ResourceClientConfig,
+  'apiKey' | 'projectId'
+> & {
+  apiKey?: string;
+  projectId?: string;
+};
 
 /**
  * Umbrella client exposing every direct-to-backend resource client the CLI
@@ -43,13 +57,18 @@ export class DisseqtResourceClient {
   readonly plans: PlansClient;
   readonly planRuns: PlanRunsClient;
 
-  constructor(config: DisseqtResourceClientConfig) {
-    this.baseUrl = (config.baseUrl ?? RESOURCES_DEFAULT_BASE_URL).replace(/\/+$/, '');
+  constructor(config: DisseqtResourceClientConfig = {}) {
+    const overrides: Parameters<typeof resolveAuthSync>[0] = {};
+    if (config.apiKey !== undefined) overrides.apiKey = config.apiKey;
+    if (config.projectId !== undefined) overrides.projectId = config.projectId;
+    if (config.baseUrl !== undefined) overrides.baseUrl = config.baseUrl;
+    const resolved = resolveAuthSync(overrides);
+    this.baseUrl = (resolved.baseUrl ?? RESOURCES_DEFAULT_BASE_URL).replace(/\/+$/, '');
     const timeoutMs =
       config.timeoutMs ?? (config.timeout === undefined ? 30_000 : config.timeout * 1000);
     const transportConfig: DisseqtHttpTransportConfig = {
-      apiKey: config.apiKey,
-      projectId: config.projectId,
+      apiKey: resolved.apiKey,
+      projectId: resolved.projectId,
       timeoutMs,
     };
     if (config.fetch !== undefined) {
