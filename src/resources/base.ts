@@ -1,4 +1,8 @@
-import { DisseqtHttpTransport, type DisseqtHttpTransportConfig } from '../http/index.js';
+import {
+  DisseqtHttpTransport,
+  type DisseqtHttpTransportConfig,
+  stripTrailingSlashes,
+} from '../http/index.js';
 import type {
   DisseqtRequestOptions,
   HttpMethod,
@@ -26,10 +30,10 @@ export class ResourceBase {
   constructor(config: ResourceClientConfig | { transport: DisseqtHttpTransport; baseUrl: string }) {
     if ('transport' in config) {
       this.transport = config.transport;
-      this.baseUrl = config.baseUrl.replace(/\/+$/, '');
+      this.baseUrl = stripTrailingSlashes(config.baseUrl);
       return;
     }
-    this.baseUrl = (config.baseUrl ?? RESOURCES_DEFAULT_BASE_URL).replace(/\/+$/, '');
+    this.baseUrl = stripTrailingSlashes(config.baseUrl ?? RESOURCES_DEFAULT_BASE_URL);
     const timeoutMs =
       config.timeoutMs ?? (config.timeout === undefined ? 30_000 : config.timeout * 1000);
     const transportConfig: DisseqtHttpTransportConfig = {

@@ -7,6 +7,7 @@ import type { StoredAuth } from '../auth/types.js';
 import { DisseqtHttpError } from '../http/errors.js';
 import { DisseqtHttpTransport } from '../http/transport.js';
 import type { JsonObject } from '../http/types.js';
+import { stripTrailingSlashes } from '../http/url.js';
 import { EXIT_FAILED, EXIT_OK, EXIT_USAGE } from './config.js';
 
 // Same defaults the resource client uses. Duplicated only because the
@@ -55,7 +56,7 @@ export function registerAuth(program: Command): void {
 async function runLogin(opts: LoginOpts): Promise<void> {
   try {
     const auth = await collectCredentials(opts);
-    const baseUrl = (opts.baseUrl ?? DEFAULT_BASE_URL).replace(/\/+$/, '');
+    const baseUrl = stripTrailingSlashes(opts.baseUrl ?? DEFAULT_BASE_URL);
     await verify(auth, baseUrl);
     const stored: StoredAuth = { apiKey: auth.apiKey, projectId: auth.projectId };
     if (opts.baseUrl !== undefined && opts.baseUrl.trim().length > 0) {
@@ -207,7 +208,7 @@ async function verify(
  * "revoke may have failed, key gone locally".
  */
 async function revokeRemote(stored: StoredAuth): Promise<void> {
-  const baseUrl = (stored.baseUrl ?? DEFAULT_BASE_URL).replace(/\/+$/, '');
+  const baseUrl = stripTrailingSlashes(stored.baseUrl ?? DEFAULT_BASE_URL);
   const transport = new DisseqtHttpTransport({
     apiKey: stored.apiKey,
     projectId: stored.projectId,

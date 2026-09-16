@@ -1,6 +1,7 @@
 import { clearTimeout, setTimeout } from 'node:timers';
 import { setTimeout as delay } from 'node:timers/promises';
 
+import { stripTrailingSlashes } from '../http/url.js';
 import type { FetchLike, JsonObject } from '../http/types.js';
 import type { EnrichedSpan } from './models.js';
 
@@ -32,7 +33,7 @@ export class AgenticHTTPTransport {
 
   constructor(config: AgenticHTTPTransportConfig) {
     assertNonEmpty('endpoint', config.endpoint);
-    this.endpoint = config.endpoint.replace(/\/+$/, '');
+    this.endpoint = stripTrailingSlashes(config.endpoint);
     this.apiKey = config.apiKey ?? null;
     this.timeoutMs = config.timeoutMs ?? 10_000;
     this.maxRetries = config.maxRetries ?? 3;
