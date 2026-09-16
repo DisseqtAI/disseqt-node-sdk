@@ -36,10 +36,10 @@ describe('policies-path removal — compile-time guards', () => {
   it('client.validate(req, { policies }) is a type error', async () => {
     const c = baseClient();
     await c.validate({ domain: 'x', slug: 'y', data: {} } as never).catch(() => undefined);
-    // @ts-expect-error - second-arg options removed; .validate takes only the request now
-    await c.validate({ domain: 'x', slug: 'y', data: {} } as never, { policies: ['pid'] }).catch(
-      () => undefined,
-    );
+    await c
+      // @ts-expect-error - second-arg options removed; .validate takes only the request now
+      .validate({ domain: 'x', slug: 'y', data: {} } as never, { policies: ['pid'] })
+      .catch(() => undefined);
   });
 });
 

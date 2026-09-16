@@ -199,14 +199,7 @@ describe('disseqt redteam CLI', () => {
   });
 
   it('attack rejects missing single-turn/multi-turn selection', async () => {
-    const result = await runCli([
-      'redteam',
-      'attack',
-      '--technique',
-      't1',
-      '--target',
-      'tg1',
-    ]);
+    const result = await runCli(['redteam', 'attack', '--technique', 't1', '--target', 'tg1']);
     expect(result.code).toBe(2);
     expect(result.stderr).toMatch(/exactly one/);
   });
@@ -352,23 +345,12 @@ describe('disseqt redteam CLI', () => {
   });
 
   it('analytics with both flags exits 2', async () => {
-    const result = await runCli([
-      'redteam',
-      'analytics',
-      '--summary',
-      '--prompts-stats',
-    ]);
+    const result = await runCli(['redteam', 'analytics', '--summary', '--prompts-stats']);
     expect(result.code).toBe(2);
   });
 
   it('recommend packs --context POSTs to bot endpoint', async () => {
-    const result = await runCli([
-      'redteam',
-      'recommend',
-      'packs',
-      '--context',
-      'financial app',
-    ]);
+    const result = await runCli(['redteam', 'recommend', 'packs', '--context', 'financial app']);
     expect(result.code).toBe(0);
     const req = requests.at(-1);
     expect(req?.url).toBe('/api/v1/testing/bot/recommend-packs');
@@ -392,12 +374,7 @@ describe('disseqt redteam CLI', () => {
   });
 
   it('test-connection --target provider/model splits correctly', async () => {
-    const result = await runCli([
-      'redteam',
-      'test-connection',
-      '--target',
-      'openai/gpt-4o',
-    ]);
+    const result = await runCli(['redteam', 'test-connection', '--target', 'openai/gpt-4o']);
     expect(result.code).toBe(0);
     const req = requests.at(-1);
     expect(req?.url).toBe('/api/v1/testing/bot/test-connection');
@@ -448,12 +425,7 @@ describe('disseqt redteam CLI', () => {
   });
 
   it('eval-single-turn default text format prints verdict line', async () => {
-    const result = await runCli([
-      'redteam',
-      'eval-single-turn',
-      '--input',
-      'hi',
-    ]);
+    const result = await runCli(['redteam', 'eval-single-turn', '--input', 'hi']);
     expect(result.code).toBe(0);
     expect(result.stdout).toMatch(/verdict:/);
   });

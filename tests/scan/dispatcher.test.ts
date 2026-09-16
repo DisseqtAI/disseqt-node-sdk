@@ -39,7 +39,11 @@ describe('dispatcher', () => {
   });
 
   it('batchChunks groups under batchChars', async () => {
-    const chunks = [chunk('a.ts', 'x'.repeat(30)), chunk('b.ts', 'y'.repeat(30)), chunk('c.ts', 'z'.repeat(30))];
+    const chunks = [
+      chunk('a.ts', 'x'.repeat(30)),
+      chunk('b.ts', 'y'.repeat(30)),
+      chunk('c.ts', 'z'.repeat(30)),
+    ];
     // With budget 50, each next chunk overflows -> one chunk per batch.
     const tight = await collect(batchChunks(chunks, 50));
     expect(tight).toHaveLength(3);

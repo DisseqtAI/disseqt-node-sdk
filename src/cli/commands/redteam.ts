@@ -121,8 +121,7 @@ const resultsToCsv = (payload: unknown): string => {
       }
     }
   }
-  const escape = (s: string): string =>
-    /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  const escape = (s: string): string => (/[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s);
   const lines = [headers.map(escape).join(',')];
   for (const row of rows) {
     if (row !== null && typeof row === 'object' && !Array.isArray(row)) {
@@ -144,10 +143,7 @@ const resultsToMarkdown = (payload: unknown): string => {
       }
     }
   }
-  const lines = [
-    `| ${headers.join(' | ')} |`,
-    `| ${headers.map(() => '---').join(' | ')} |`,
-  ];
+  const lines = [`| ${headers.join(' | ')} |`, `| ${headers.map(() => '---').join(' | ')} |`];
   for (const row of rows) {
     if (row !== null && typeof row === 'object' && !Array.isArray(row)) {
       const record = row as Record<string, unknown>;
@@ -282,7 +278,9 @@ export function registerRedteam(program: Command): void {
           const session = await client.createSession({ target: opts.target });
           const sessionId = resolveId(session, 'id', 'session_id');
           if (sessionId === null) {
-            throw new Error(`could not resolve session id from response: ${JSON.stringify(session)}`);
+            throw new Error(
+              `could not resolve session id from response: ${JSON.stringify(session)}`,
+            );
           }
           const run = await client.createRun(sessionId, {
             technique: opts.technique,
@@ -308,16 +306,12 @@ export function registerRedteam(program: Command): void {
   // -------------------------------------------------------------------
 
   const sessionCmd = cmd.command('session').description('inspect red-team sessions');
-  sessionCmd
-    .command('list')
-    .action(async () => {
-      await runAction(async () => emit(await rt().listSessions(), true));
-    });
-  sessionCmd
-    .command('get <sessionId>')
-    .action(async (sessionId: string) => {
-      await runAction(async () => emit(await rt().getSession(sessionId), true));
-    });
+  sessionCmd.command('list').action(async () => {
+    await runAction(async () => emit(await rt().listSessions(), true));
+  });
+  sessionCmd.command('get <sessionId>').action(async (sessionId: string) => {
+    await runAction(async () => emit(await rt().getSession(sessionId), true));
+  });
 
   // -------------------------------------------------------------------
   // vuln-test — POST /api/v1/vulnerabilities/{id}/test/poll
@@ -394,10 +388,7 @@ export function registerRedteam(program: Command): void {
     .description('one-shot single-turn validation (POST /api/v1/testing/validate)')
     .requiredOption('--input <text>', 'prompt / LLM input to score')
     .option('--output <text>', 'LLM output to score (may be empty)', '')
-    .requiredOption(
-      '--validator <name...>',
-      'validator name (repeatable). At least one required.',
-    )
+    .requiredOption('--validator <name...>', 'validator name (repeatable). At least one required.')
     .option('--input-context <text>', 'optional context passed to the validator', '')
     .option('--threshold <value>', 'override per-validator threshold (0 < t <= 1)')
     .action(
@@ -508,42 +499,40 @@ export function registerRedteam(program: Command): void {
     .option('--summary', 'only fetch the summary endpoint', false)
     .option('--prompts-stats', 'only fetch the prompts-stats endpoint', false)
     .option('--format <fmt>', 'table | json', 'table')
-    .action(
-      async (opts: { summary?: boolean; promptsStats?: boolean; format: string }) => {
-        if (opts.summary === true && opts.promptsStats === true) {
-          usage('pass at most one of --summary or --prompts-stats');
+    .action(async (opts: { summary?: boolean; promptsStats?: boolean; format: string }) => {
+      if (opts.summary === true && opts.promptsStats === true) {
+        usage('pass at most one of --summary or --prompts-stats');
+      }
+      if (!['table', 'json'].includes(opts.format)) {
+        usage(`--format must be one of table|json (got "${opts.format}")`);
+      }
+      const wantSummary = opts.summary === true || opts.promptsStats !== true;
+      const wantPrompts = opts.promptsStats === true || opts.summary !== true;
+      await runAction(async () => {
+        const client = rt();
+        // Alphabetical insertion order matches Python's sort_keys=True.
+        const out: JsonObject = {};
+        if (wantPrompts) out['prompts_stats'] = await client.analyticsPromptsStats();
+        if (wantSummary) out['summary'] = await client.analyticsSummary();
+        if (opts.format === 'json') {
+          const values = Object.values(out);
+          emit(values.length === 1 ? values[0] : out, true);
+          return;
         }
-        if (!['table', 'json'].includes(opts.format)) {
-          usage(`--format must be one of table|json (got "${opts.format}")`);
-        }
-        const wantSummary = opts.summary === true || opts.promptsStats !== true;
-        const wantPrompts = opts.promptsStats === true || opts.summary !== true;
-        await runAction(async () => {
-          const client = rt();
-          // Alphabetical insertion order matches Python's sort_keys=True.
-          const out: JsonObject = {};
-          if (wantPrompts) out['prompts_stats'] = await client.analyticsPromptsStats();
-          if (wantSummary) out['summary'] = await client.analyticsSummary();
-          if (opts.format === 'json') {
-            const values = Object.values(out);
-            emit(values.length === 1 ? values[0] : out, true);
-            return;
-          }
-          // table format — just render each block as key/value lines.
-          for (const [title, payload] of Object.entries(out)) {
-            process.stdout.write(`# ${title.replace(/_/g, ' ')}\n`);
-            if (payload !== null && typeof payload === 'object' && !Array.isArray(payload)) {
-              for (const [k, v] of Object.entries(payload)) {
-                process.stdout.write(`${k}: ${stringifyCell(v)}\n`);
-              }
-            } else {
-              process.stdout.write(`${JSON.stringify(payload, null, 2)}\n`);
+        // table format — just render each block as key/value lines.
+        for (const [title, payload] of Object.entries(out)) {
+          process.stdout.write(`# ${title.replace(/_/g, ' ')}\n`);
+          if (payload !== null && typeof payload === 'object' && !Array.isArray(payload)) {
+            for (const [k, v] of Object.entries(payload)) {
+              process.stdout.write(`${k}: ${stringifyCell(v)}\n`);
             }
-            process.stdout.write('\n');
+          } else {
+            process.stdout.write(`${JSON.stringify(payload, null, 2)}\n`);
           }
-        });
-      },
-    );
+          process.stdout.write('\n');
+        }
+      });
+    });
 
   // -------------------------------------------------------------------
   // recommend {packs,attacks,validators}
@@ -653,11 +642,7 @@ export function registerRedteam(program: Command): void {
           }
           const pollMs = Math.round(Number(opts.pollInterval) * 1000);
           const maxMs = Math.round(Number(opts.maxWait) * 1000);
-          const final = await pollUntilTerminal(
-            () => client.evaluateCsvJob(jobId),
-            pollMs,
-            maxMs,
-          );
+          const final = await pollUntilTerminal(() => client.evaluateCsvJob(jobId), pollMs, maxMs);
           const state = String(final['status'] ?? final['state'] ?? '').toLowerCase();
           if (!TERMINAL.has(state)) {
             throw new Error(`job ${jobId} did not finish within ${opts.maxWait}s`);

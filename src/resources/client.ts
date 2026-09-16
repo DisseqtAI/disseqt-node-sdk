@@ -24,10 +24,7 @@ import { ValidationsClient } from './validations.js';
  * `DISSEQT_PROJECT_ID`. `AuthMissingError` fires only when every source
  * comes up empty.
  */
-export type DisseqtResourceClientConfig = Omit<
-  ResourceClientConfig,
-  'apiKey' | 'projectId'
-> & {
+export type DisseqtResourceClientConfig = Omit<ResourceClientConfig, 'apiKey' | 'projectId'> & {
   apiKey?: string;
   projectId?: string;
 };

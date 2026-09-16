@@ -116,7 +116,7 @@ config: { threshold: 0.5, llmAsAJudge: true, llmId: '25dc0684-…' }
 > and the `realtimePolicyBaseUrl` / `policies` ctor options) has been
 > removed. The runtime endpoint it targeted is not currently served by any
 > in-scope backend. Class-based validators (`client.validate(new
-> InputValidator(...))` and the composite / themes helpers) are unaffected.
+InputValidator(...))` and the composite / themes helpers) are unaffected.
 
 ### Composite Scoring
 
