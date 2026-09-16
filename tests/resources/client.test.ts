@@ -126,6 +126,21 @@ describe('PacksClient', () => {
     await client.packs.publish('p1');
     expect(lastCall(fetcher)[0]).toContain('/prompt-packs/p1/publish');
   });
+
+  // G3 regression: backend registers PATCH at /prompt-packs/:id/publish
+  // (server.go:2237, 2460); POST is a 404.
+  it('publish/unpublish use PATCH', async () => {
+    const { client, fetcher } = makeClient();
+    await client.packs.publish('p1');
+    let [url, init] = lastCall(fetcher);
+    expect(url).toBe(`${RESOURCES_DEFAULT_BASE_URL}/api/v1/prompt-packs/p1/publish`);
+    expect(init?.method).toBe('PATCH');
+
+    await client.packs.unpublish('p1');
+    [url, init] = lastCall(fetcher);
+    expect(url).toBe(`${RESOURCES_DEFAULT_BASE_URL}/api/v1/prompt-packs/p1/unpublish`);
+    expect(init?.method).toBe('PATCH');
+  });
 });
 
 describe('RunsClient', () => {
