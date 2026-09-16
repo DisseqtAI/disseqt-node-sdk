@@ -1,5 +1,9 @@
 import { resolveAuthSync } from '../auth/resolve.js';
-import { DisseqtHttpTransport, type DisseqtHttpTransportConfig } from '../http/index.js';
+import {
+  DisseqtHttpTransport,
+  type DisseqtHttpTransportConfig,
+  stripTrailingSlashes,
+} from '../http/index.js';
 import { CustomValidatorsClient } from './customValidators.js';
 import { McpTargetsClient, RagTargetsClient, VulnerabilitiesClient } from './misc.js';
 import { PacksClient } from './packs.js';
@@ -59,7 +63,7 @@ export class DisseqtResourceClient {
     if (config.projectId !== undefined) overrides.projectId = config.projectId;
     if (config.baseUrl !== undefined) overrides.baseUrl = config.baseUrl;
     const resolved = resolveAuthSync(overrides);
-    this.baseUrl = (resolved.baseUrl ?? RESOURCES_DEFAULT_BASE_URL).replace(/\/+$/, '');
+    this.baseUrl = stripTrailingSlashes(resolved.baseUrl ?? RESOURCES_DEFAULT_BASE_URL);
     const timeoutMs =
       config.timeoutMs ?? (config.timeout === undefined ? 30_000 : config.timeout * 1000);
     const transportConfig: DisseqtHttpTransportConfig = {

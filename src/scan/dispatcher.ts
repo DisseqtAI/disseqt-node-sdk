@@ -2,6 +2,7 @@
 
 import type { DisseqtHttpTransport } from '../http/index.js';
 import { DisseqtHttpError } from '../http/errors.js';
+import { stripTrailingSlashes } from '../http/url.js';
 import type { CodeChunk, CodeFinding, Severity } from './schema.js';
 
 export const DEFAULT_BATCH_CHARS = 40_000;
@@ -301,7 +302,7 @@ export function makeDefaultTransport(
   transport: DisseqtHttpTransport,
   baseUrl: string,
 ): ScanTransport {
-  const trimmedBase = baseUrl.replace(/\/+$/, '');
+  const trimmedBase = stripTrailingSlashes(baseUrl);
   return async (method, path, body) => {
     return transport.requestJson({
       method,

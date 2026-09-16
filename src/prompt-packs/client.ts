@@ -2,6 +2,7 @@ import {
   DisseqtHttpError,
   DisseqtHttpTransport,
   type DisseqtHttpTransportConfig,
+  stripTrailingSlashes,
 } from '../http/index.js';
 import type { DisseqtRequestOptions, JsonObject, QueryParams } from '../http/types.js';
 import {
@@ -34,7 +35,7 @@ export class DisseqtAPIClient {
   constructor(config: DisseqtAPIClientConfig) {
     this.projectId = config.projectId;
     this.apiKey = config.apiKey;
-    this.baseUrl = (config.baseUrl ?? PROMPT_PACKS_DEFAULT_BASE_URL).replace(/\/+$/, '');
+    this.baseUrl = stripTrailingSlashes(config.baseUrl ?? PROMPT_PACKS_DEFAULT_BASE_URL);
     this.timeoutMs =
       config.timeoutMs ?? (config.timeout === undefined ? 30_000 : config.timeout * 1000);
 
