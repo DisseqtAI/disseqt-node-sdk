@@ -40,6 +40,11 @@ export class TargetsClient extends ResourceBase {
     );
   }
 
+  /**
+   * Test connection without saving (dry run). Python-SDK parity: this is
+   * `TargetsResource.probe()`. Names diverge historically; a rename would
+   * be a breaking API change with no correctness upside so kept as-is.
+   */
   testConnection(payload: JsonValue): Promise<JsonObject> {
     return this._request('POST', `${ROOT}/test-connection`, { json: payload });
   }
