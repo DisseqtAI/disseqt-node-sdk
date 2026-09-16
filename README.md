@@ -17,7 +17,6 @@ The official **Node.js / TypeScript SDK** for the [Disseqt AI](https://disseqt.a
 - [Installation](#installation)
 - [Quick Start](#quick-start)
   - [Validation](#validation)
-  - [Realtime Policies](#realtime-policies)
   - [Composite Scoring](#composite-scoring)
   - [Agentic Tracing](#agentic-tracing)
   - [Prompt Packs](#prompt-packs)
@@ -111,67 +110,13 @@ config: { threshold: 0.5, llmAsAJudge: true, llmId: '25dc0684-…' }
 
 ### Realtime Policies
 
-A **realtime policy** is a named, versioned bundle of validators — with their thresholds, labels, and a decision strategy — that you author once in the Disseqt dashboard and evaluate by **policy id**, straight from `client.validate()`. No validator, no config, no threshold in code — the policy owns all of that:
-
-```ts
-import { Client, InputValidationRequest, anyBlocking } from '@disseqt-ai/sdk';
-
-const client = new Client({
-  projectId: 'your-project-id',
-  apiKey: 'your-api-key',
-  applicationName: 'checkout-bot', // required to evaluate policies
-});
-
-const result = await client.validate(new InputValidationRequest({ prompt: userInput }), {
-  policies: ['994ad00e-bff4-4cff-8a45-2635f3f3fcd0'],
-});
-
-if (anyBlocking(result)) {
-  throw new Error('Blocked by realtime policy');
-}
-```
-
-For each policy id the server resolves the latest published version, runs every validator the policy specifies, applies the policy's decision strategy, returns one **BLOCK/PASS** verdict with a per-rule breakdown, and records the decision on the dashboard's **Decisions** ledger. Change a threshold in the dashboard, publish, and every caller picks it up — no code deploy.
-
-`validate()` has three call shapes:
-
-```ts
-// 1. Validator only — classic, unchanged.
-await client.validate(validator);
-
-// 2. Validator + policies — the validator runs as usual AND the same
-//    input is evaluated against each policy id.
-const result = await client.validate(validator, { policies: [policyId] });
-result.validation; // the validator's own result
-result.policies; // one full-policy verdict per id, in order
-
-// 3. Policies only — pass a bare request model; the policies decide everything.
-await client.validate(new InputValidationRequest({ prompt }), { policies: [policyId] });
-```
-
-A client-level default applies the same list to every call (a per-call `{ policies }` always overrides it):
-
-```ts
-const governed = new Client({
-  projectId,
-  apiKey,
-  applicationName: 'checkout-bot',
-  policies: ['994ad00e-…'], // every validate() call is now policy-checked
-});
-```
-
-Read verdicts with the typed helpers:
-
-```ts
-import { parsePolicy, isBlocking, isAsync, anyBlocking } from '@disseqt-ai/sdk';
-
-const decision = parsePolicy(result.policies[0]);
-decision?.decision; // 'BLOCK' | 'PASS'
-decision?.enforcement; // 'sync' | 'async'
-decision?.rulesets; // per-rule breakdown: validator, status, score, threshold
-```
-
-See [`examples/realtime-policies.ts`](examples/realtime-policies.ts) for a runnable walkthrough.
+> **Not in this release.** The server-side realtime-policy evaluation
+> surface (`client.validate(request, { policies: [...] })`, `Guardrails`,
+> `BlockedError`, `anyBlocking` / `parsePolicy` / `isBlocking` / `isAsync`,
+> and the `realtimePolicyBaseUrl` / `policies` ctor options) has been
+> removed. The runtime endpoint it targeted is not currently served by any
+> in-scope backend. Class-based validators (`client.validate(new
+InputValidator(...))` and the composite / themes helpers) are unaffected.
 
 ### Composite Scoring
 
@@ -307,9 +252,7 @@ const client = new Client({
   apiKey: 'your-api-key', // required
   baseUrl: 'https://api.disseqt.ai/realtime-validations', // default; override for staging
   timeout: 30, // seconds; default 30
-  applicationName: 'checkout-bot', // required only to evaluate realtime policies
-  realtimePolicyBaseUrl: 'https://api.disseqt.ai/realtime-validations', // default
-  policies: ['994ad00e-…'], // optional client-wide policy default
+  applicationName: 'checkout-bot', // recorded on outbound requests for observability
 });
 ```
 

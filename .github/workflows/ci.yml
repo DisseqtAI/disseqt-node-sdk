@@ -61,6 +61,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Build (CLI tests spawn dist/cli/index.js)
+        run: npm run build
+
       - name: Vitest with coverage
         # Integration tests requiring a live API are not part of the default suite.
         run: npm test -- --coverage
