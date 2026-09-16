@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+### Removed
+
+- **Server-side realtime-policy evaluation surface.** The
+  `Client.validate(request, { policies: [...] })` shape (and its
+  `Client.validateSync(..., { raiseOnAsync: true })` companion), the
+  `Guardrails` class + `BaseGuard` extension, `BlockedError`, the
+  policy helpers module (`anyBlocking`, `isBlocking`, `isAsync`,
+  `parsePolicy`, `PolicyDecision`, `PolicyRule`, `PolicyRuleset`,
+  `DECISION_BLOCK/BORDERLINE/PASS`), and the `realtimePolicyBaseUrl` /
+  `policies` ctor options have been removed. The runtime evaluate
+  endpoint they targeted (`POST /api/v1/sdk/policies/{id}/evaluate`) is
+  not currently served by any in-scope backend; keeping the shape
+  without a working transport would silently 404 on the first live
+  call. Class-based validators (`Client.validate(new InputValidator(...))`
+  and the composite/themes paths) are unaffected.
+
 ### Fixed
 
 - **`CreateRunRequest`'s `runName` now actually reaches the server.** Since
