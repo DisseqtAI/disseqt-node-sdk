@@ -101,6 +101,19 @@ describe('TargetsClient', () => {
     await client.targets.parseCurl({ curl: 'x' });
     expect(lastCall(fetcher)[0]).toContain('/parse-curl');
   });
+
+  // G3 regression: `.test(id)` must POST /:id/test-connection, not /:id/test.
+  // Backend registers only the -connection variant (server.go:811).
+  it('test(id) POSTs /:id/test-connection', async () => {
+    const { client, fetcher } = makeClient();
+    await client.targets.test('t1', { probe: 'hello' });
+    const [url, init] = lastCall(fetcher);
+    expect(url).toBe(
+      `${RESOURCES_DEFAULT_BASE_URL}/api/v1/llm/app-integrations/t1/test-connection`,
+    );
+    expect(init?.method).toBe('POST');
+    expect(JSON.parse(String(init?.body))).toEqual({ probe: 'hello' });
+  });
 });
 
 describe('PacksClient', () => {
