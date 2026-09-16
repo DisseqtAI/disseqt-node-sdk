@@ -71,19 +71,13 @@ export class VulnerabilitiesClient extends ResourceBase {
   }
 }
 
-/** Multi-turn jailbreak (MR) sessions. */
-export class MultiTurnClient extends ResourceBase {
-  private readonly root = '/api/v1/mr';
-  create(payload: JsonValue): Promise<JsonObject> {
-    return this._request('POST', this.root, { json: payload });
-  }
-  list(params?: QueryParams): Promise<JsonObject> {
-    return this._request('GET', this.root, params ? { params } : {});
-  }
-  get(id: string): Promise<JsonObject> {
-    return this._request('GET', `${this.root}/${id}`);
-  }
-  delete(id: string): Promise<JsonObject> {
-    return this._request('DELETE', `${this.root}/${id}`);
-  }
-}
+// NOTE: MultiTurnClient (previously exposed as `client.mr`) was removed
+// because no backend registers /api/v1/mr — the multi-turn surface lives at
+// /api/v1/mr-jailbreak/* (mr_jailbreak_routes.go:17). All four methods hit
+// unregistered routes. The functionality already exists on RedteamClient:
+//   getMrJob             GET  /api/v1/mr-jailbreak/jobs/:id
+//   getMrJobInteractions GET  /api/v1/mr-jailbreak/jobs/:id/interactions
+//   batchAutomate        POST /api/v1/mr-jailbreak/batch-automate
+//   listMultiTurnTechniques / listAgents
+// Chose Option (i) delete over Option (ii) rename because the class name
+// implied a generic /api/v1/mr root that does not exist in any form.

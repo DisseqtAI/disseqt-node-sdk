@@ -1,12 +1,7 @@
 import { resolveAuthSync } from '../auth/resolve.js';
 import { DisseqtHttpTransport, type DisseqtHttpTransportConfig } from '../http/index.js';
 import { CustomValidatorsClient } from './customValidators.js';
-import {
-  McpTargetsClient,
-  MultiTurnClient,
-  RagTargetsClient,
-  VulnerabilitiesClient,
-} from './misc.js';
+import { McpTargetsClient, RagTargetsClient, VulnerabilitiesClient } from './misc.js';
 import { PacksClient } from './packs.js';
 import { PlanRunsClient } from './planRuns.js';
 import { PlansClient } from './plans.js';
@@ -54,7 +49,6 @@ export class DisseqtResourceClient {
   readonly ragTargets: RagTargetsClient;
   readonly mcpTargets: McpTargetsClient;
   readonly vulnerabilities: VulnerabilitiesClient;
-  readonly mr: MultiTurnClient;
   readonly plans: PlansClient;
   readonly planRuns: PlanRunsClient;
   readonly redteam: RedteamClient;
@@ -88,7 +82,6 @@ export class DisseqtResourceClient {
     this.ragTargets = new RagTargetsClient(shared);
     this.mcpTargets = new McpTargetsClient(shared);
     this.vulnerabilities = new VulnerabilitiesClient(shared);
-    this.mr = new MultiTurnClient(shared);
     this.plans = new PlansClient(shared);
     this.planRuns = new PlanRunsClient(shared);
     this.redteam = new RedteamClient(shared);

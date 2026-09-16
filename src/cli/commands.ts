@@ -491,27 +491,10 @@ export function registerBonus(program: Command): void {
       }),
   );
 
-  const mr = program.command('mr').description('multi-turn jailbreak (MR)');
-  commonJson(
-    mr.command('list').action(async (opts: CommonOpts) => {
-      await runAction(async () => emit(await buildClient().mr.list(), opts.json === true));
-    }),
-  );
-  commonJson(
-    mr.command('get <id>').action(async (id: string, opts: CommonOpts) => {
-      await runAction(async () => emit(await buildClient().mr.get(id), opts.json === true));
-    }),
-  );
-  commonJson(
-    mr
-      .command('create')
-      .requiredOption('--body <json|file|->', 'request body')
-      .action(async (opts: CommonOpts & { body: string }) => {
-        await runAction(async () =>
-          emit(await buildClient().mr.create(readBody(opts.body) as never), opts.json === true),
-        );
-      }),
-  );
+  // NOTE: the `mr` group (previously list/get/create) was removed alongside
+  // MultiTurnClient — none of its routes existed on the backend. The real
+  // multi-turn surface is `/api/v1/mr-jailbreak/*`, exposed through
+  // `disseqt redteam` (list-attacks / batch-automate / status / results).
 }
 
 /** plan group — Test Plans (T3). /api/v1/test-plans/... */
