@@ -33,12 +33,18 @@ export class PacksClient extends ResourceBase {
     );
   }
 
+  /**
+   * Publish a pack. Backend registers PATCH at both mounts:
+   * /api/v1/prompt-packs/:id/publish (server.go:2237) and
+   * /api/v1/sdk/prompt-packs/:id/publish (server.go:2460).
+   */
   publish(id: string): Promise<JsonObject> {
-    return this._request('POST', `${ROOT}/${id}/publish`);
+    return this._request('PATCH', `${ROOT}/${id}/publish`);
   }
 
+  /** See {@link publish}. Backend PATCHes at server.go:2238, 2461. */
   unpublish(id: string): Promise<JsonObject> {
-    return this._request('POST', `${ROOT}/${id}/unpublish`);
+    return this._request('PATCH', `${ROOT}/${id}/unpublish`);
   }
 
   restore(id: string): Promise<JsonObject> {
