@@ -42,7 +42,8 @@ describe('DisseqtResourceClient', () => {
     expect(client.ragTargets).toBeDefined();
     expect(client.mcpTargets).toBeDefined();
     expect(client.vulnerabilities).toBeDefined();
-    expect(client.mr).toBeDefined();
+    // G3 removal: `client.mr` retired — see MultiTurnClient note in misc.ts.
+    expect((client as { mr?: unknown }).mr).toBeUndefined();
     expect(client.plans).toBeDefined();
     expect(client.planRuns).toBeDefined();
   });
@@ -216,8 +217,8 @@ describe('Bonus resource clients', () => {
     expect(lastCall(fetcher)[0]).toContain('/api/v1/llm/mcp-integrations');
     await client.vulnerabilities.list();
     expect(lastCall(fetcher)[0]).toContain('/api/v1/vulnerabilities');
-    await client.mr.list();
-    expect(lastCall(fetcher)[0]).toContain('/api/v1/mr');
+    // G3 removal: `client.mr.list()` retired — no backend at /api/v1/mr.
+    // The multi-turn surface is on RedteamClient (mr-jailbreak routes).
   });
 });
 
