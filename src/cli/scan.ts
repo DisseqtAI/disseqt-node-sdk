@@ -49,7 +49,9 @@ function parseIntOrDie(name: string, value: string | undefined, fallback: number
   if (value === undefined) return fallback;
   const n = Number.parseInt(value, 10);
   if (!Number.isFinite(n) || n <= 0) {
-    process.stderr.write(`error: --${name} must be a positive integer (got ${JSON.stringify(value)})\n`);
+    process.stderr.write(
+      `error: --${name} must be a positive integer (got ${JSON.stringify(value)})\n`,
+    );
     process.exit(EXIT_USAGE);
   }
   return n;
@@ -111,10 +113,21 @@ async function runScan(scanPath: string, opts: ScanOpts): Promise<never> {
 
   const cfg = await loadConfig(scanRoot);
   const effectiveMin =
-    opts.minSeverity !== 'low' ? opts.minSeverity : cfg.min_severity ?? opts.minSeverity;
-  const maxFileBytesCli = parseIntOrDie('max-file-bytes', opts.maxFileBytes, DEFAULT_MAX_FILE_BYTES);
-  const maxChunkCharsCli = parseIntOrDie('max-chunk-chars', opts.maxChunkChars, DEFAULT_MAX_CHUNK_CHARS);
-  const batchCharsCli = opts.batchChars === undefined ? null : parseIntOrDie('batch-chars', opts.batchChars, DEFAULT_BATCH_CHARS);
+    opts.minSeverity !== 'low' ? opts.minSeverity : (cfg.min_severity ?? opts.minSeverity);
+  const maxFileBytesCli = parseIntOrDie(
+    'max-file-bytes',
+    opts.maxFileBytes,
+    DEFAULT_MAX_FILE_BYTES,
+  );
+  const maxChunkCharsCli = parseIntOrDie(
+    'max-chunk-chars',
+    opts.maxChunkChars,
+    DEFAULT_MAX_CHUNK_CHARS,
+  );
+  const batchCharsCli =
+    opts.batchChars === undefined
+      ? null
+      : parseIntOrDie('batch-chars', opts.batchChars, DEFAULT_BATCH_CHARS);
 
   const effectiveMaxFile = cfg.max_file_bytes ?? maxFileBytesCli;
   const effectiveMaxChunk = cfg.max_chunk_chars ?? maxChunkCharsCli;
@@ -220,7 +233,12 @@ export function registerScan(program: Command): void {
       '--batch-chars <n>',
       `bundle chunks up to N chars per request (default ${DEFAULT_BATCH_CHARS}; env DISSEQT_SCAN_CONTEXT_LIMIT)`,
     )
-    .option('--validator <name>', 'override default validator set (repeatable)', collectValidator, [])
+    .option(
+      '--validator <name>',
+      'override default validator set (repeatable)',
+      collectValidator,
+      [],
+    )
     .action(async (pathArg: string | undefined, opts: ScanOpts) => {
       await runScan(pathArg ?? '.', opts);
     });

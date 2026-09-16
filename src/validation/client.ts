@@ -114,9 +114,7 @@ export class Client {
    * registers, so it was removed. This method now only runs the
    * validator classes exposed under `validation/validators`.
    */
-  async validate(
-    request: Validatable | GenericValidationRequest,
-  ): Promise<JsonObject> {
+  async validate(request: Validatable | GenericValidationRequest): Promise<JsonObject> {
     if (!isValidatable(request) && !isGenericValidationRequest(request)) {
       throw new ValueError(
         'request must be a validator instance or a validation request ' +
@@ -133,9 +131,7 @@ export class Client {
    * server-side policy-evaluate path and no longer apply. Now a
    * one-line delegator so existing callers keep working.
    */
-  async validateSync(
-    request: Validatable | GenericValidationRequest,
-  ): Promise<JsonObject> {
+  async validateSync(request: Validatable | GenericValidationRequest): Promise<JsonObject> {
     return this.validate(request);
   }
 

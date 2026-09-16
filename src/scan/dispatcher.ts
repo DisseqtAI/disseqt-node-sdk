@@ -227,7 +227,8 @@ export function extractFindingsList(envelope: unknown): Record<string, unknown>[
       const val = holder[key];
       if (Array.isArray(val)) {
         return val.filter(
-          (x): x is Record<string, unknown> => typeof x === 'object' && x !== null && !Array.isArray(x),
+          (x): x is Record<string, unknown> =>
+            typeof x === 'object' && x !== null && !Array.isArray(x),
         );
       }
     }
@@ -269,7 +270,11 @@ export async function* dispatch(
     for (const validator of validators) {
       let envelope: unknown;
       try {
-        envelope = await transport('POST', validatorPath(validator), buildPayload(batch, validator));
+        envelope = await transport(
+          'POST',
+          validatorPath(validator),
+          buildPayload(batch, validator),
+        );
       } catch (error) {
         stats.batches_failed += 1;
         if (error instanceof DisseqtHttpError) {

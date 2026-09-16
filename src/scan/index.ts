@@ -31,17 +31,8 @@ export {
   resolveBatchChars,
   validatorPath,
 } from './dispatcher.js';
-export type {
-  ChunkBatch,
-  DispatchOptions,
-  DispatchStats,
-  ScanTransport,
-} from './dispatcher.js';
+export type { ChunkBatch, DispatchOptions, DispatchStats, ScanTransport } from './dispatcher.js';
 export { GitDiffError, changedFiles, parseDiffRange } from './gitDiff.js';
 export { toJson, toMarkdown, toSarif } from './formatters.js';
-export {
-  SEVERITY_ORDER,
-  findingToDict,
-  meetsMinSeverity,
-} from './schema.js';
+export { SEVERITY_ORDER, findingToDict, meetsMinSeverity } from './schema.js';
 export type { CodeChunk, CodeFinding, ScanConfig, Severity } from './schema.js';

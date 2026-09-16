@@ -52,7 +52,9 @@ export async function changedFiles(
         reject(new GitDiffError('git is not installed or not on PATH', { cause: error }));
         return;
       }
-      reject(new GitDiffError(`git diff ${base}..${head} failed: ${error.message}`, { cause: error }));
+      reject(
+        new GitDiffError(`git diff ${base}..${head} failed: ${error.message}`, { cause: error }),
+      );
     });
     child.on('close', (code: number | null) => {
       if (code !== 0) {

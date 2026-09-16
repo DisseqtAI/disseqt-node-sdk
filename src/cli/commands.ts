@@ -539,10 +539,7 @@ export function registerPlan(program: Command): void {
       .requiredOption('--body <json|file|->', 'request body')
       .action(async (opts: CommonOpts & { body: string }) => {
         await runAction(async () =>
-          emit(
-            await buildClient().plans.create(readBody(opts.body) as never),
-            opts.json === true,
-          ),
+          emit(await buildClient().plans.create(readBody(opts.body) as never), opts.json === true),
         );
       }),
   );
@@ -621,10 +618,7 @@ export function registerPlan(program: Command): void {
   commonJson(
     cmd
       .command('generate-inputs')
-      .requiredOption(
-        '--body <json|file|->',
-        'app_description + subcategories + organization_id',
-      )
+      .requiredOption('--body <json|file|->', 'app_description + subcategories + organization_id')
       .action(async (opts: CommonOpts & { body: string }) => {
         await runAction(async () =>
           emit(
@@ -719,8 +713,7 @@ export function registerPlanRun(program: Command): void {
       .option('--stage-key <key>', 'required by backend for results page')
       .action(async (runId: string, opts: CommonOpts & { stageKey?: string }) => {
         await runAction(async () => {
-          const params =
-            opts.stageKey !== undefined ? { stage_key: opts.stageKey } : undefined;
+          const params = opts.stageKey !== undefined ? { stage_key: opts.stageKey } : undefined;
           emit(await buildClient().planRuns.report(runId, params), opts.json === true);
         });
       }),

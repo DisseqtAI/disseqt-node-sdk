@@ -93,9 +93,7 @@ async function runLogout(opts: LogoutOpts): Promise<void> {
 }
 
 /** Read from flags first, fall back to interactive stdin. */
-async function collectCredentials(
-  opts: LoginOpts,
-): Promise<{ apiKey: string; projectId: string }> {
+async function collectCredentials(opts: LoginOpts): Promise<{ apiKey: string; projectId: string }> {
   const explicitKey = opts.apiKey?.trim();
   const explicitProject = opts.projectId?.trim();
   if (
@@ -183,10 +181,7 @@ function promptLine(rl: ReadlineInterface, prompt: string): Promise<string> {
  * 200 → keys are good. 401 → wrong key or project. Any other status →
  * surface the HTTP error unchanged.
  */
-async function verify(
-  auth: { apiKey: string; projectId: string },
-  baseUrl: string,
-): Promise<void> {
+async function verify(auth: { apiKey: string; projectId: string }, baseUrl: string): Promise<void> {
   const transport = new DisseqtHttpTransport({
     apiKey: auth.apiKey,
     projectId: auth.projectId,
@@ -244,7 +239,9 @@ async function revokeRemote(stored: StoredAuth): Promise<void> {
   }
 }
 
-function extractEntries(body: { data?: JsonObject[]; items?: JsonObject[] } | JsonObject): JsonObject[] {
+function extractEntries(
+  body: { data?: JsonObject[]; items?: JsonObject[] } | JsonObject,
+): JsonObject[] {
   if (Array.isArray((body as { data?: unknown }).data)) {
     return (body as { data: JsonObject[] }).data;
   }

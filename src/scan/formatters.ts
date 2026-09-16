@@ -116,7 +116,8 @@ export function toSarif(findings: readonly CodeFinding[]): string {
   const results: Record<string, unknown>[] = [];
 
   for (const f of findings) {
-    const ruleId = f.vulnerability_type.length > 0 ? f.vulnerability_type : f.validator || 'unknown';
+    const ruleId =
+      f.vulnerability_type.length > 0 ? f.vulnerability_type : f.validator || 'unknown';
     if (!rulesSeen.has(ruleId)) {
       rulesSeen.set(ruleId, {
         id: ruleId,

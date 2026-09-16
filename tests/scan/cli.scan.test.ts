@@ -55,7 +55,11 @@ interface RunResult {
   stderr: string;
 }
 
-const runCli = (args: string[], cwd: string, env: Record<string, string> = {}): Promise<RunResult> =>
+const runCli = (
+  args: string[],
+  cwd: string,
+  env: Record<string, string> = {},
+): Promise<RunResult> =>
   new Promise((resolve) => {
     const child = spawn(process.execPath, [CLI, ...args], {
       cwd,
@@ -102,7 +106,9 @@ describe('disseqt scan CLI', () => {
     expect(parsed.version).toBe('2.1.0');
     expect(parsed.runs).toHaveLength(1);
     // Backend was hit for the sql-injection validator.
-    const hit = requests.find((r) => r.url === '/api/v1/sdk/validators/input-validation/sql-injection');
+    const hit = requests.find(
+      (r) => r.url === '/api/v1/sdk/validators/input-validation/sql-injection',
+    );
     expect(hit?.method).toBe('POST');
   });
 
