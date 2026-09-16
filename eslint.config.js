@@ -30,6 +30,9 @@ export default [
         Buffer: 'readonly',
         setTimeout: 'readonly',
         clearTimeout: 'readonly',
+        fetch: 'readonly',
+        Response: 'readonly',
+        Request: 'readonly',
       },
     },
     plugins: {
