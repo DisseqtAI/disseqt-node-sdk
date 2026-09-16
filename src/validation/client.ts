@@ -121,26 +121,10 @@ export interface PolicyValidationResult extends JsonObject {
  *    passed to `validate()`. Hits `/api/v1/validators/composite-score`.
  *    No policy involved.
  *
- * 3. **Run one or more published realtime policies** — pass
- *    `{ policies: [...] }` to `validate()`, with or without a validator:
- *
- *        const result = await client.validate(
- *          new InputValidationRequest({ prompt: 'user prompt here' }),
- *          { policies: ['b1f8…'] },
- *        );
- *        if (anyBlocking(result)) {
- *          ...  // at least one policy said BLOCK
- *        }
- *
- *    For each policy id, the server fetches the policy from
- *    disseqt-realtime-policies-service, runs every validator the policy
- *    specifies (with the policy's thresholds and decision strategy),
- *    aggregates a BLOCK/PASS verdict, and publishes the result to
- *    `policy.validation.result.v1` so it shows up on the Decisions
- *    dashboard. The policy endpoints live on their own base URL
- *    (`realtimePolicyBaseUrl`) so they can be mocked or pointed at a
- *    local server during tests without disturbing the validator base
- *    URL. Requires `applicationName` on the client.
+ * The prior `{ policies: [...] }` shape (server-side realtime-policy
+ * evaluation) is not exposed in this release — the runtime evaluate
+ * endpoint it targeted is not currently served by any in-scope backend.
+ * Class-based validators are unaffected.
  */
 export class Client {
   readonly projectId: string;
@@ -229,119 +213,36 @@ export class Client {
   }
 
   /**
-   * Run a validator, one or more realtime policies, or both.
+   * Run a single validator (or composite/themes) and return its response.
    *
-   * Three call shapes, chosen by what you pass:
-   *
-   * 1. **Validator only** (unchanged classic behavior) — a validator
-   *    instance or generic request object; runs that one validator and
-   *    returns its validation response.
-   *
-   * 2. **Validator + policies** — the validator runs as usual AND the
-   *    same input is evaluated against each policy id, server-side, with
-   *    each policy's own rulesets, thresholds, and decision strategy:
-   *
-   *        const result = await client.validate(
-   *          new InputValidator({ slug, data, config }),
-   *          { policies: ['994ad00e-…', '1268faa4-…'] },
-   *        );
-   *
-   * 3. **Policies only** — pass a bare request object (any
-   *    `validation/models` request, no validator, no config); the
-   *    policies decide everything:
-   *
-   *        const result = await client.validate(
-   *          new InputValidationRequest({ prompt, response }),
-   *          { policies: ['994ad00e-…'] },
-   *        );
-   *
-   * When policies apply the return value is a stable envelope —
-   * `{ validation: {...} | null, policies: [{...}, ...] }` — gate on it
-   * with `anyBlocking()`. Each policy is one server-side evaluation
-   * (billed per executed validator, one Decisions-ledger entry each);
-   * policies are evaluated sequentially in the order given. Inputs a
-   * policy's validator doesn't receive skip neutrally with
-   * `missing_input:<fields>` — supply the union of fields the policies
-   * need (see the policy detail endpoint's `required_input_fields`).
-   *
-   * **Client-level default.** A client constructed with
-   * `Client({ policies: [...] })` applies that list to every `validate()`
-   * call that doesn't pass its own `{ policies }` — the per-call value
-   * always overrides the client default. Composite-score and
-   * themes-classifier requests are incompatible with policies; they run
-   * classically and the client default steps aside. Passing
-   * `{ policies: [] }` explicitly is always an error — an accidentally
-   * empty list must fail loudly rather than silently ungate the call.
-   *
-   * Without policies anywhere, behavior is exactly as before.
-   *
-   * Throws `DisseqtHttpError` if any API request fails (unknown or
-   * unpublished policies answer 404 DSQ-4040) and `ValueError` on invalid
-   * combinations (bare request without policies anywhere, empty
-   * `policies` list, missing `applicationName`, explicit policies with
-   * composite/themes).
+   * The historical `{ policies: [...] }` shape targeted an aspirational
+   * server-side policy-evaluate endpoint that no in-scope backend
+   * registers, so it was removed. This method now only runs the
+   * validator classes exposed under `validation/validators`.
    */
   async validate(
-    request: Validatable | GenericValidationRequest | SupportsInputData,
-    options: ValidateOptions & { policies: readonly string[] },
-  ): Promise<PolicyValidationResult>;
-  async validate(
-    request: Validatable | GenericValidationRequest | SupportsInputData,
-    options?: ValidateOptions,
-  ): Promise<JsonObject>;
-  async validate(
-    request: Validatable | GenericValidationRequest | SupportsInputData,
-    options?: ValidateOptions,
+    request: Validatable | GenericValidationRequest,
   ): Promise<JsonObject> {
-    if (options?.policies !== undefined) {
-      return this.validateWithPolicies(request, options.policies);
-    }
-    if (this.policies !== null && !isPolicyIncompatible(request)) {
-      // Composite/themes can't be policy-evaluated. An explicit per-call
-      // combination throws (caller error), but a client-wide default must
-      // not make those endpoints unusable — it steps aside for them.
-      return this.validateWithPolicies(request, this.policies);
-    }
     if (!isValidatable(request) && !isGenericValidationRequest(request)) {
       throw new ValueError(
-        'A bare request object needs { policies: [...] } — pass a validator ' +
-          'instance to run a single validator, or add { policies: [...] } to ' +
-          'evaluate this input against realtime policies',
+        'request must be a validator instance or a validation request ' +
+          `model, got ${describeType(request)}`,
       );
     }
     return this.runValidator(request);
   }
 
   /**
-   * Sync-block wrapper around `validate()`: runs the same call and throws
-   * `BlockedError` when any policy verdict is BLOCK. Semantically identical
-   * to::
+   * Alias for `validate()` retained for API stability.
    *
-   *     const result = await client.validate(req, { policies: [...] });
-   *     if (anyBlocking(result)) throw new BlockedError(...);
-   *     return result;
-   *
-   * — one line at every gate instead of that pattern repeated everywhere.
-   * With `raiseOnAsync: true`, also throws when any policy ran in async
-   * mode (no final verdict in this response). Mirrors the Python SDK's
-   * `validate_sync()`.
+   * Historical block-on-verdict semantics were tied to the removed
+   * server-side policy-evaluate path and no longer apply. Now a
+   * one-line delegator so existing callers keep working.
    */
   async validateSync(
-    request: Validatable | GenericValidationRequest | SupportsInputData,
-    options?: ValidateSyncOptions,
+    request: Validatable | GenericValidationRequest,
   ): Promise<JsonObject> {
-    const result = await this.validate(request, options);
-    if (anyBlocking(result)) {
-      throw new BlockedError('realtime policy verdict is BLOCK — call blocked', result, 'block');
-    }
-    if (options?.raiseOnAsync === true && isAnyAsync(result)) {
-      throw new BlockedError(
-        'realtime policy ran in async mode — no final verdict available in-band',
-        result,
-        'async',
-      );
-    }
-    return result;
+    return this.validate(request);
   }
 
   /**
