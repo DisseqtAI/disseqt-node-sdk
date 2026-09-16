@@ -220,9 +220,15 @@ export class RedteamClient extends ResourceBase {
     return this._request('GET', `${JB}/analytics/summary`);
   }
 
-  /** GET /api/v1/jailbreak/analytics/prompts-stats */
+  /**
+   * GET /api/v1/jailbreak/prompts-stats.
+   *
+   * Backend registers /prompts-stats at jailbreak_routes.go:57. The
+   * /analytics/ prefix applies only to /analytics/summary
+   * (jailbreak_routes.go:64) — /analytics/prompts-stats is a 404.
+   */
   analyticsPromptsStats(): Promise<JsonObject> {
-    return this._request('GET', `${JB}/analytics/prompts-stats`);
+    return this._request('GET', `${JB}/prompts-stats`);
   }
 
   // ---------------------------------------------------------------------
@@ -268,9 +274,16 @@ export class RedteamClient extends ResourceBase {
     return this.transport.requestJson(req);
   }
 
-  /** GET /api/v1/jailbreak/jobs/{id}/process — poll status for evaluate-csv. */
+  /**
+   * GET /api/v1/jailbreak/evaluate-csv/{jobId} — poll status for evaluate-csv.
+   *
+   * Backend jailbreak_routes.go:55 registers the status GET on
+   * /evaluate-csv/:generation_job_id. The prior /jobs/:id/process was a
+   * method-and-path mismatch — /jobs/:id/process is a POST trigger
+   * (jailbreak_routes.go:45), not a GET status probe.
+   */
   evaluateCsvJob(jobId: string): Promise<JsonObject> {
-    return this._request('GET', `${JB}/jobs/${jobId}/process`);
+    return this._request('GET', `${JB}/evaluate-csv/${jobId}`);
   }
 
   /** POST /api/v1/jailbreak/single-turn-evaluate — one-prompt scorer. */

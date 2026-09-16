@@ -155,12 +155,16 @@ describe('RedteamClient — validate', () => {
 });
 
 describe('RedteamClient — analytics + bot', () => {
-  it('analyticsSummary / analyticsPromptsStats hit /jailbreak/analytics/*', async () => {
+  // G3 regression: /analytics/ prefixes only /analytics/summary. The
+  // prompts-stats endpoint sits at the bare /prompts-stats path
+  // (jailbreak_routes.go:57).
+  it('analyticsSummary hits /analytics/summary; analyticsPromptsStats hits /prompts-stats', async () => {
     const { client, fetcher } = makeClient();
     await client.redteam.analyticsSummary();
     expect(lastCall(fetcher)[0]).toBe(`${BASE}/api/v1/jailbreak/analytics/summary`);
     await client.redteam.analyticsPromptsStats();
-    expect(lastCall(fetcher)[0]).toBe(`${BASE}/api/v1/jailbreak/analytics/prompts-stats`);
+    expect(lastCall(fetcher)[0]).toBe(`${BASE}/api/v1/jailbreak/prompts-stats`);
+    expect(lastCall(fetcher)[1]?.method).toBe('GET');
   });
 
   it('recommend/parseCurl/testConnection POST under /testing/bot', async () => {
@@ -193,10 +197,14 @@ describe('RedteamClient — eval', () => {
     expect(init?.body).toBeInstanceOf(FormData);
   });
 
-  it('evaluateCsvJob GETs the process endpoint', async () => {
+  // G3 regression: CSV-eval status is GET /jailbreak/evaluate-csv/:job_id
+  // (jailbreak_routes.go:55). /jobs/:id/process is a POST trigger
+  // (jailbreak_routes.go:45), not a GET status probe.
+  it('evaluateCsvJob GETs /jailbreak/evaluate-csv/{jobId}', async () => {
     const { client, fetcher } = makeClient();
     await client.redteam.evaluateCsvJob('j1');
-    expect(lastCall(fetcher)[0]).toBe(`${BASE}/api/v1/jailbreak/jobs/j1/process`);
+    expect(lastCall(fetcher)[0]).toBe(`${BASE}/api/v1/jailbreak/evaluate-csv/j1`);
+    expect(lastCall(fetcher)[1]?.method).toBe('GET');
   });
 
   it('singleTurnEvaluate POSTs input plus optional fields', async () => {
