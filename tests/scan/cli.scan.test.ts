@@ -23,6 +23,26 @@ beforeAll(async () => {
         return;
       }
       res.writeHead(200, { 'Content-Type': 'application/json' });
+      if (req.headers['x-api-key'] === 'broke') {
+        // Live shape: failure rides an HTTP 200 with zero-filled data.
+        res.end(
+          JSON.stringify({
+            data: {
+              metric_name: 'llm-judge-shell-injection',
+              actual_value: 0,
+              metric_labels: null,
+              threshold: null,
+              threshold_score: 0,
+              others: null,
+            },
+            status: {
+              code: '402',
+              message: 'insufficient credits or the credit service is unavailable',
+            },
+          }),
+        );
+        return;
+      }
       // disseqt-go compat envelope from the llm-judge route: a failing score
       // yields one finding per chunk so exit code + rendered output can be asserted.
       res.end(
@@ -69,6 +89,7 @@ const runCli = (
         ...process.env,
         DISSEQT_API_KEY: 'k',
         DISSEQT_PROJECT_ID: 'p',
+        DISSEQT_ORGANIZATION_ID: 'org-1',
         DISSEQT_VALIDATORS_BASE_URL: baseUrl,
         DISSEQT_SHOW_PROGRESS: '0',
         ...env,
@@ -113,6 +134,36 @@ describe('disseqt scan CLI', () => {
     );
     expect(hit?.method).toBe('POST');
     expect(raw).toContain('String-concat SQL');
+    // sdk_judge_handlers.go binds both as required.
+    const body = JSON.parse(hit?.body ?? '{}') as Record<string, unknown>;
+    expect(body['project_id']).toBe('p');
+    expect(body['organization_id']).toBe('org-1');
+  });
+
+  it('exits 2 naming DISSEQT_ORGANIZATION_ID when it is missing', async () => {
+    const tmp = await mkdtemp(path.join(tmpdir(), 'scan-cli-'));
+    await writeFile(path.join(tmp, 'a.py'), 'code = 1\n');
+    const before = requests.length;
+    const result = await runCli(['scan', tmp], tmp, { DISSEQT_ORGANIZATION_ID: '' });
+    expect(result.code).toBe(2);
+    expect(result.stderr).toContain('DISSEQT_ORGANIZATION_ID');
+    expect(requests.length - before).toBe(0);
+  });
+
+  it('exits 1 with no findings when the judge reports 402 inside an HTTP 200', async () => {
+    const tmp = await mkdtemp(path.join(tmpdir(), 'scan-cli-'));
+    await writeFile(path.join(tmp, 'a.py'), 'code = 1\n');
+    const before = requests.length;
+    const result = await runCli(
+      ['scan', tmp, '--validator', 'shell-injection', '--validator', 'bfla', '--format', 'json'],
+      tmp,
+      { DISSEQT_API_KEY: 'broke' },
+    );
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain('HTTP 402: insufficient credits');
+    expect(result.stderr).toContain('0 batch(es) ok, 1 failed');
+    expect(JSON.parse(result.stdout)).toMatchObject({ count: 0, findings: [] });
+    expect(requests.length - before).toBe(1);
   });
 
   it('honours --no-fail-on-findings', async () => {

@@ -77,6 +77,17 @@
 threshold_score, others}}`) is turned into one finding per chunk when
   `actual_value` reaches `threshold_score`, with severity from a severity
   label or the 0–1 score; a `findings[]` list is still honoured.
+- **`disseqt scan` no longer turns a failed judge call into findings.** The
+  judge route reports failures inside an HTTP 200
+  (`{data:{…zeros}, status:{code:"402", message:"insufficient credits…"}}`);
+  that used to become one LOW finding per chunk and "N batches ok". Now
+  `status.code != "200"` raises the same `DisseqtHttpError` the HTTP path
+  uses, counts the batch as failed, and 401/402/403 stop the scan.
+  `actual_value <= 0` never yields a finding and `threshold_score <= 0` /
+  missing falls back to 0.5. Every judge request now carries `project_id`
+  - `organization_id` (both bound `required` by `sdk_judge_handlers.go`);
+    `DISSEQT_ORGANIZATION_ID` is required for `disseqt scan` (exit 2 when
+    missing).
 - `disseqt scan` exits 1 when no validator request succeeded or any batch
   failed (config errors stay exit 2), prints the first failure, and stops
   after the first 401/403 instead of replaying it for every batch.

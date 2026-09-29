@@ -117,8 +117,25 @@ export function newDispatchStats(): DispatchStats {
   };
 }
 
-const isAuthFailure = (error: unknown): boolean =>
-  error instanceof DisseqtHttpError && (error.statusCode === 401 || error.statusCode === 403);
+/** 401/403 = bad credentials, 402 = out of credits: every later request fails the same way. */
+const isUnrecoverable = (error: unknown): boolean =>
+  error instanceof DisseqtHttpError && [401, 402, 403].includes(error.statusCode);
+
+/**
+ * The judge route reports failures INSIDE an HTTP 200:
+ * `{data:{...zeros}, status:{code:"402", message:"insufficient credits"}}`.
+ * Surface those as the same typed error the HTTP path throws.
+ */
+export function raiseForWireStatus(envelope: unknown): void {
+  if (envelope === null || typeof envelope !== 'object') return;
+  const status = (envelope as Record<string, unknown>)['status'];
+  if (status === null || typeof status !== 'object') return;
+  const code = String((status as Record<string, unknown>)['code'] ?? '200');
+  if (code === '200') return;
+  const message = String((status as Record<string, unknown>)['message'] ?? 'judge error');
+  const parsed = Number.parseInt(code, 10);
+  throw new DisseqtHttpError(Number.isFinite(parsed) ? parsed : 0, message, JSON.stringify(status));
+}
 
 /** Transport hook — split out so tests can inject a fake. */
 export type ScanTransport = (
@@ -131,7 +148,17 @@ export function validatorPath(validator: string, domain: string = VALIDATOR_DOMA
   return VALIDATOR_PATH_TEMPLATE.replace('{domain}', domain).replace('{validator}', validator);
 }
 
-function buildPayload(batch: ChunkBatch, validator: string): Record<string, unknown> {
+/** Billing/integration scope the judge route binds as required (sdk_judge_handlers.go). */
+export interface ScanScope {
+  projectId: string;
+  organizationId: string;
+}
+
+function buildPayload(
+  batch: ChunkBatch,
+  validator: string,
+  scope?: ScanScope,
+): Record<string, unknown> {
   return {
     input_data: {
       llm_input_query: batchAsPrompt(batch),
@@ -141,6 +168,9 @@ function buildPayload(batch: ChunkBatch, validator: string): Record<string, unkn
       validator,
       chunk_count: batch.chunks.length,
     },
+    ...(scope !== undefined
+      ? { project_id: scope.projectId, organization_id: scope.organizationId }
+      : {}),
   };
 }
 
@@ -280,9 +310,11 @@ export function findingsFromMetric(
   const env = envelope as Record<string, unknown>;
   const data = (env['data'] ?? env) as Record<string, unknown>;
   const score = data['actual_value'];
-  if (typeof score !== 'number' || !Number.isFinite(score)) return [];
+  // A zero score is "nothing judged" (the failure envelope zero-fills data), never a finding.
+  if (typeof score !== 'number' || !Number.isFinite(score) || score <= 0) return [];
+  const rawThreshold = data['threshold_score'];
   const threshold =
-    typeof data['threshold_score'] === 'number' ? data['threshold_score'] : DEFAULT_THRESHOLD_SCORE;
+    typeof rawThreshold === 'number' && rawThreshold > 0 ? rawThreshold : DEFAULT_THRESHOLD_SCORE;
   if (score < threshold) return [];
 
   const labels = Array.isArray(data['metric_labels'])
@@ -323,13 +355,15 @@ export interface DispatchOptions {
   transport?: ScanTransport;
   stats?: DispatchStats;
   onProgress?: (done: number, total: number) => void;
+  /** Sent as `project_id` / `organization_id` in every judge request body. */
+  scope?: ScanScope;
 }
 
 /**
  * POST batches to each validator and yield the parsed findings.
  * Batch-level failures are logged to stderr and skipped so one flaky
- * validator doesn't kill the whole scan — except 401/403, which would fail
- * every remaining request identically, so dispatch stops at the first one.
+ * validator doesn't kill the whole scan — except 401/402/403, which would
+ * fail every remaining request identically, so dispatch stops at the first one.
  */
 export async function* dispatch(
   chunks: AsyncIterable<CodeChunk> | Iterable<CodeChunk>,
@@ -357,8 +391,9 @@ export async function* dispatch(
         envelope = await transport(
           'POST',
           validatorPath(validator),
-          buildPayload(batch, validator),
+          buildPayload(batch, validator, options.scope),
         );
+        raiseForWireStatus(envelope);
       } catch (error) {
         stats.batches_failed += 1;
         const msg = error instanceof Error ? error.message : String(error);
@@ -368,7 +403,7 @@ export async function* dispatch(
         );
         done += 1;
         options.onProgress?.(done, stats.total_batches);
-        if (isAuthFailure(error)) return;
+        if (isUnrecoverable(error)) return;
         continue;
       }
       stats.batches_ok += 1;

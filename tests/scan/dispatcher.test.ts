@@ -10,6 +10,7 @@ import {
   findingsFromMetric,
   newDispatchStats,
   normalizeValidator,
+  raiseForWireStatus,
   resolveBatchChars,
   validatorPath,
 } from '../../src/scan/index.js';
@@ -141,6 +142,93 @@ describe('dispatcher', () => {
       line_end: 3,
       validator: 'llm-judge-bfla',
     });
+  });
+
+  // Live-verified: the judge route reports 402 INSIDE an HTTP 200 with zero-filled data.
+  it('dispatch treats status.code != "200" as a failed batch and stops on 402', async () => {
+    const failure = {
+      data: {
+        metric_name: 'llm-judge-shell-injection',
+        actual_value: 0,
+        metric_labels: null,
+        threshold: null,
+        threshold_score: 0,
+        others: null,
+      },
+      status: { code: '402', message: 'insufficient credits or the credit service is unavailable' },
+    };
+    const transport: ScanTransport = vi.fn(async () => failure);
+    const stats = newDispatchStats();
+    const findings = await collect(
+      dispatch([chunk('a.ts', 'code\n')], ['shell-injection', 'bfla'], transport, { stats }),
+    );
+    expect(findings).toEqual([]);
+    expect(transport).toHaveBeenCalledTimes(1);
+    expect(stats.batches_ok).toBe(0);
+    expect(stats.batches_failed).toBe(1);
+    expect(stats.first_error).toBe(
+      'validator llm-judge-shell-injection: HTTP 402: insufficient credits or the credit service is unavailable',
+    );
+  });
+
+  it('raiseForWireStatus throws DisseqtHttpError with the wire code, passes 200 / no status', () => {
+    expect(() =>
+      raiseForWireStatus({ data: {}, status: { code: '200', message: 'OK' } }),
+    ).not.toThrow();
+    expect(() => raiseForWireStatus({ data: { findings: [] } })).not.toThrow();
+    const err = (() => {
+      try {
+        raiseForWireStatus({ data: {}, status: { code: '500', message: 'judge exploded' } });
+      } catch (e) {
+        return e;
+      }
+      return null;
+    })();
+    expect(err).toBeInstanceOf(DisseqtHttpError);
+    expect((err as DisseqtHttpError).statusCode).toBe(500);
+    expect((err as Error).message).toBe('HTTP 500: judge exploded');
+  });
+
+  it('dispatch sends project_id / organization_id when a scope is given', async () => {
+    const transport: ScanTransport = vi.fn(async () => ({ data: { findings: [] } }));
+    await collect(
+      dispatch([chunk('a.ts', 'code\n')], ['bfla'], transport, {
+        scope: { projectId: 'proj_1', organizationId: 'org_1' },
+      }),
+    );
+    const body = (transport as ReturnType<typeof vi.fn>).mock.calls[0]?.[2] as Record<
+      string,
+      unknown
+    >;
+    expect(body['project_id']).toBe('proj_1');
+    expect(body['organization_id']).toBe('org_1');
+    expect(body).toHaveProperty('input_data');
+    expect(body).toHaveProperty('config_input');
+  });
+
+  it('findingsFromMetric: zero score never a finding; threshold_score <= 0 means default 0.5', () => {
+    const batch = { chunks: [chunk('a.ts', 'x')] };
+    expect(
+      findingsFromMetric(
+        { data: { actual_value: 0, threshold_score: 0 } },
+        'llm-judge-bfla',
+        batch,
+      ),
+    ).toEqual([]);
+    expect(
+      findingsFromMetric(
+        { data: { actual_value: 0.3, threshold_score: 0 } },
+        'llm-judge-bfla',
+        batch,
+      ),
+    ).toEqual([]);
+    expect(
+      findingsFromMetric(
+        { data: { actual_value: 0.6, threshold_score: 0 } },
+        'llm-judge-bfla',
+        batch,
+      ),
+    ).toHaveLength(1);
   });
 
   it('findingsFromMetric: below threshold → none; severity label wins over score', () => {

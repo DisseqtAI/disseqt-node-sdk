@@ -27,6 +27,7 @@ import {
   type CodeChunk,
   type CodeFinding,
   type ScanConfig,
+  type ScanScope,
   type ScanTransport,
 } from '../scan/index.js';
 import { EXIT_FAILED, EXIT_OK, EXIT_USAGE } from './config.js';
@@ -78,9 +79,10 @@ function shouldShowProgress(fmt: string, hasOutputPath: boolean): boolean {
   return process.stderr.isTTY === true;
 }
 
-function buildTransport(): { transport: ScanTransport; baseUrl: string } {
+function buildTransport(): { transport: ScanTransport; baseUrl: string; scope: ScanScope } {
   const apiKey = process.env['DISSEQT_API_KEY'];
   const projectId = process.env['DISSEQT_PROJECT_ID'];
+  const organizationId = process.env['DISSEQT_ORGANIZATION_ID'];
   const baseUrl = process.env[BASE_ENV] ?? DEFAULT_BASE;
 
   if (apiKey === undefined || apiKey.trim().length === 0) {
@@ -91,8 +93,17 @@ function buildTransport(): { transport: ScanTransport; baseUrl: string } {
     process.stderr.write('error: DISSEQT_PROJECT_ID is not set\n');
     process.exit(EXIT_USAGE);
   }
+  // The judge route binds organization_id as required (billing scope).
+  if (organizationId === undefined || organizationId.trim().length === 0) {
+    process.stderr.write('error: DISSEQT_ORGANIZATION_ID is not set\n');
+    process.exit(EXIT_USAGE);
+  }
   const http = new DisseqtHttpTransport({ apiKey, projectId });
-  return { transport: makeDefaultTransport(http, baseUrl), baseUrl };
+  return {
+    transport: makeDefaultTransport(http, baseUrl),
+    baseUrl,
+    scope: { projectId: http.projectId, organizationId: organizationId.trim() },
+  };
 }
 
 async function runScan(scanPath: string, opts: ScanOpts): Promise<never> {
@@ -169,7 +180,7 @@ async function runScan(scanPath: string, opts: ScanOpts): Promise<never> {
     process.exit(EXIT_OK);
   }
 
-  const { transport } = buildTransport();
+  const { transport, scope } = buildTransport();
   const stats = newDispatchStats();
   const showProgress = shouldShowProgress(fmt, opts.output !== undefined);
 
@@ -177,6 +188,7 @@ async function runScan(scanPath: string, opts: ScanOpts): Promise<never> {
   const dispatchOpts: Parameters<typeof dispatch>[3] = {
     batchChars: effectiveBatchChars,
     stats,
+    scope,
   };
   if (showProgress) {
     dispatchOpts.onProgress = (done, total) => {
