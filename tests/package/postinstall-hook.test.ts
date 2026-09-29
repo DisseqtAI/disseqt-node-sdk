@@ -13,7 +13,9 @@ describe('consumer-install safety (drift guard)', () => {
     // for repo-only setup steps like this one. See scripts/compat-brace-expansion.cjs
     // for what it patches and why. Reintroducing `postinstall` here breaks
     // `npm install @disseqt-ai/sdk` for every consumer with MODULE_NOT_FOUND.
-    const pkg = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8')) as {
+    const pkg = JSON.parse(
+      readFileSync(new URL('../../package.json', import.meta.url), 'utf8'),
+    ) as {
       scripts?: Record<string, string>;
     };
     expect(pkg.scripts?.postinstall).toBeUndefined();
