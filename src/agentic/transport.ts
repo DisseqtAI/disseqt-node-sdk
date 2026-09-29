@@ -7,6 +7,7 @@ import type { EnrichedSpan } from './models.js';
 export interface AgenticHTTPTransportConfig {
   endpoint: string;
   apiKey?: string | null;
+  applicationId?: string | null;
   timeoutMs?: number;
   maxRetries?: number;
   fetch?: FetchLike;
@@ -25,6 +26,7 @@ export interface CustomTracePayload extends JsonObject {
 export class AgenticHTTPTransport {
   readonly endpoint: string;
   readonly apiKey: string | null;
+  readonly applicationId: string | null;
   readonly timeoutMs: number;
   readonly maxRetries: number;
 
@@ -34,6 +36,7 @@ export class AgenticHTTPTransport {
     assertNonEmpty('endpoint', config.endpoint);
     this.endpoint = config.endpoint.replace(/\/+$/, '');
     this.apiKey = config.apiKey ?? null;
+    this.applicationId = config.applicationId ?? null;
     this.timeoutMs = config.timeoutMs ?? 10_000;
     this.maxRetries = config.maxRetries ?? 3;
     this.fetcher = config.fetch ?? globalThis.fetch.bind(globalThis);
@@ -83,15 +86,42 @@ export class AgenticHTTPTransport {
     try {
       return await this.fetcher(this.endpoint, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: this.buildHeaders(payload),
         body: JSON.stringify(payload),
         signal: controller.signal,
       });
     } finally {
       clearTimeout(timeout);
     }
+  }
+
+  // Header-first path for Kong's traces-auth plugin, matching the Python
+  // SDK's transport/http.py: a header-aware plugin can authenticate before
+  // touching a single byte of body. resource.attributes stays populated on
+  // the body too (see buildCustomTracePayload) so this SDK still works
+  // against plugin versions that only look in the body -- old-server /
+  // new-client is safe. api_key/project_id are read back off the payload
+  // itself (not a separate field) so the header can never drift from what
+  // the body already carries -- project_id in particular varies per span
+  // group in this SDK, not per-transport-instance.
+  private buildHeaders(payload: CustomTracePayload): Record<string, string> {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    const attrs = payload.resource.attributes;
+    const apiKey = attrs['api.key'];
+    if (typeof apiKey === 'string' && apiKey.length > 0) {
+      headers['X-Api-Key'] = apiKey;
+    }
+    const projectId = attrs['project.id'];
+    if (typeof projectId === 'string' && projectId.length > 0) {
+      headers['X-Project-Id'] = projectId;
+    }
+    // Optional: existing 0.3.0 callers never set this and must keep working
+    // unchanged. Production's gateway does not require it today (default
+    // require_application_verify=false); only sent when the caller opts in.
+    if (this.applicationId) {
+      headers['X-Application-Id'] = this.applicationId;
+    }
+    return headers;
   }
 }
 

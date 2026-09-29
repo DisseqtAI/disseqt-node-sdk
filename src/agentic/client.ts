@@ -10,6 +10,8 @@ export interface DisseqtAgenticClientConfig {
   api_key?: string;
   projectId?: string;
   project_id?: string;
+  applicationId?: string;
+  application_id?: string;
   serviceName?: string;
   service_name?: string;
   endpoint?: string;
@@ -33,6 +35,7 @@ export class DisseqtAgenticClient {
 
   readonly apiKey: string;
   readonly projectId: string;
+  readonly applicationId: string | null;
   readonly serviceName: string;
   readonly serviceVersion: string;
   readonly environment: string;
@@ -43,6 +46,7 @@ export class DisseqtAgenticClient {
   constructor(config: DisseqtAgenticClientConfig) {
     const apiKey = config.apiKey ?? config.api_key;
     const projectId = config.projectId ?? config.project_id;
+    const applicationId = config.applicationId ?? config.application_id;
     const serviceName = config.serviceName ?? config.service_name;
     const endpoint = config.endpoint ?? DEFAULT_ENDPOINT;
     const environment = config.environment ?? 'production';
@@ -55,6 +59,13 @@ export class DisseqtAgenticClient {
 
     this.apiKey = apiKey;
     this.projectId = projectId;
+    // Optional, unlike apiKey/projectId above: existing callers upgrading
+    // from 0.2.x/0.3.0 never set this and must keep working unchanged.
+    // Production's gateway does not require it today (default
+    // require_application_verify=false); staging does. Send it only when
+    // the caller opts in -- see AgenticHTTPTransport.buildHeaders.
+    this.applicationId =
+      applicationId !== undefined && applicationId.trim().length > 0 ? applicationId : null;
     this.serviceName = serviceName;
     this.serviceVersion = config.serviceVersion ?? config.service_version ?? '1.0.0';
     this.environment = environment;
@@ -63,6 +74,7 @@ export class DisseqtAgenticClient {
     const transportConfig = {
       endpoint,
       apiKey,
+      applicationId: this.applicationId,
       maxRetries: config.maxRetries ?? config.max_retries ?? 3,
     };
     this.transport = new AgenticHTTPTransport(
