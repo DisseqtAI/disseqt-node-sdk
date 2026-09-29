@@ -59,8 +59,11 @@ export async function runAction(fn: () => Promise<void>): Promise<void> {
 }
 
 /**
- * Poll `getStatus` until it returns a terminal status or timeout elapses.
- * Terminal statuses: completed, failed, cancelled, error, blocked, succeeded.
+ * Poll `getStatus` until it returns a terminal status; throws once the
+ * deadline passes so `runAction` exits non-zero instead of printing a
+ * still-running payload as if it were final. `getStatus` receives the
+ * unwrapped `data` object, so `status` is the run's own state — never the
+ * envelope's `"success"`.
  * ponytail: constant 3s interval + 15min ceiling; upgrade to exp backoff if runs
  * routinely miss the ceiling.
  */
@@ -83,13 +86,14 @@ export async function pollUntilTerminal<T extends Record<string, unknown>>(
     'errored',
     'blocked',
     'succeeded',
-    'success',
   ]);
   for (;;) {
     const res = await getStatus();
     const status = String(res['status'] ?? '').toLowerCase();
     if (terminal.has(status)) return res;
-    if (Date.now() > deadline) return res;
+    if (Date.now() > deadline) {
+      throw new Error(`timed out waiting for terminal status (last status: "${status || '?'}")`);
+    }
     await new Promise((r) => setTimeout(r, interval));
   }
 }

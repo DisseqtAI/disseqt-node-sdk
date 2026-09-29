@@ -45,19 +45,23 @@ beforeAll(async () => {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       // Match query-stripped path against the map, then fall back.
       const path = (req.url ?? '').split('?')[0] ?? '';
+      // Real backend envelope (api/response.go): the SDK unwraps `data`.
       const mapped = responseMap[path];
       if (mapped !== undefined) {
-        res.end(JSON.stringify(mapped));
+        res.end(JSON.stringify({ status: 'success', data: mapped }));
         return;
       }
       // Runs polling: return a completed run then results.
       res.end(
         JSON.stringify({
-          id: 'test-id',
-          session_id: 'session-1',
-          run_id: 'run-1',
-          job_id: 'job-1',
-          status: 'completed',
+          status: 'success',
+          data: {
+            id: 'test-id',
+            session_id: 'session-1',
+            run_id: 'run-1',
+            job_id: 'job-1',
+            status: 'completed',
+          },
         }),
       );
     });

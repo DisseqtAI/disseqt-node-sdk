@@ -1,6 +1,6 @@
 import { clearTimeout, setTimeout } from 'node:timers';
 
-import { DisseqtHttpError, DisseqtJsonError } from './errors.js';
+import { DisseqtApiError, DisseqtHttpError, DisseqtJsonError } from './errors.js';
 import { checkVersionNotice, sdkIdentityHeaders, versionBlockedError } from './versionNotice.js';
 import type {
   DisseqtAuthConfig,
@@ -50,6 +50,12 @@ export class DisseqtHttpTransport {
     return headers;
   }
 
+  /**
+   * Strict JSON path: the backend's `{status:"success",data}` envelope is
+   * unwrapped to `data`, which must be an object. A `{status:"error"}`
+   * envelope throws {@link DisseqtApiError}. Bare (non-envelope) objects
+   * pass through unchanged.
+   */
   async requestJson<TResponse extends JsonObject = JsonObject>(
     options: DisseqtRequestOptions,
   ): Promise<TResponse> {
@@ -63,47 +69,26 @@ export class DisseqtHttpTransport {
       throw new DisseqtJsonError('Server returned null/empty JSON response', response.text);
     }
 
-    try {
-      const parsed: unknown = JSON.parse(response.text);
-      if (parsed === null) {
-        throw new DisseqtJsonError('Server returned null/empty JSON response', response.text);
-      }
-      if (!isJsonObject(parsed)) {
-        throw new DisseqtJsonError('Server returned non-object JSON response', response.text);
-      }
-      return parsed as TResponse;
-    } catch (error) {
-      if (error instanceof DisseqtJsonError) {
-        throw error;
-      }
-      const message = error instanceof Error ? error.message : String(error);
-      throw new DisseqtJsonError(
-        `Failed to decode JSON response: ${message}. Response text: ${response.text.slice(0, 200)}`,
-        response.text,
-        { cause: error },
-      );
+    const data = unwrapEnvelope(parseJson(response.text), response.text);
+    if (data === null) {
+      throw new DisseqtJsonError('Server returned null/empty JSON response', response.text);
     }
+    if (!isJsonObject(data)) {
+      throw new DisseqtJsonError('Server returned non-object JSON response', response.text);
+    }
+    return data as TResponse;
   }
 
   /**
-   * Parse arbitrary JSON (objects, arrays, primitives). Used by resource
-   * clients that hit endpoints returning arrays, e.g. `/attack-techniques`
-   * or `/mr-jailbreak/agents`. `requestJson` remains the strict path.
+   * Parse arbitrary JSON (objects, arrays, primitives) with the same
+   * envelope unwrapping as `requestJson`. Used by resource clients that hit
+   * endpoints whose `data` is an array, e.g. `/mr-jailbreak/agents`.
    */
   async requestJsonAny(options: DisseqtRequestOptions): Promise<unknown> {
     const response = await this.requestRaw(options);
     if (response.status === 204) return null;
     if (response.text.length === 0) return null;
-    try {
-      return JSON.parse(response.text);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      throw new DisseqtJsonError(
-        `Failed to decode JSON response: ${message}. Response text: ${response.text.slice(0, 200)}`,
-        response.text,
-        { cause: error },
-      );
-    }
+    return unwrapEnvelope(parseJson(response.text), response.text);
   }
 
   async requestRaw(options: DisseqtRequestOptions): Promise<RawResponse> {
@@ -196,6 +181,33 @@ function assertNonEmpty(name: string, value: string): void {
   if (value.trim().length === 0) {
     throw new ValueError(`${name} is required and cannot be empty`);
   }
+}
+
+function parseJson(text: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new DisseqtJsonError(
+      `Failed to decode JSON response: ${message}. Response text: ${text.slice(0, 200)}`,
+      text,
+      { cause: error },
+    );
+  }
+}
+
+/** `{status:"success",data}` → data; `{status:"error",...}` → throw; anything else → as-is. */
+function unwrapEnvelope(parsed: unknown, text: string): unknown {
+  if (!isJsonObject(parsed)) return parsed;
+  if (parsed['status'] === 'error') {
+    const err = isJsonObject(parsed['error']) ? parsed['error'] : {};
+    const external = typeof err['external'] === 'string' ? err['external'] : 'API request failed';
+    const code = typeof parsed['code'] === 'string' ? parsed['code'] : String(err['code'] ?? '');
+    const requestId = typeof parsed['request_id'] === 'string' ? parsed['request_id'] : undefined;
+    throw new DisseqtApiError(external, code, text.slice(0, ERROR_BODY_PREVIEW_LENGTH), requestId);
+  }
+  if (parsed['status'] === 'success' && 'data' in parsed) return parsed['data'];
+  return parsed;
 }
 
 function isJsonObject(value: unknown): value is JsonObject {

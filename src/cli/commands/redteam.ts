@@ -26,7 +26,6 @@ const TERMINAL = new Set([
   'canceled',
   'error',
   'errored',
-  'success',
   'succeeded',
   'done',
 ]);

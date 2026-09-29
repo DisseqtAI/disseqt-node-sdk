@@ -167,8 +167,7 @@ export function registerRun(program: Command): void {
             }
             const runId = String(created['id'] ?? created['run_id'] ?? '');
             if (runId.length === 0) {
-              emit(created, opts.json === true);
-              return;
+              throw new Error(`could not resolve run id from response: ${JSON.stringify(created)}`);
             }
             const final = await pollUntilTerminal(() => c.runs.get(runId));
             emit(final, opts.json === true);
@@ -656,10 +655,9 @@ export function registerPlanRun(program: Command): void {
               emit(created, opts.json === true);
               return;
             }
-            const runId = String(created['run_id'] ?? '');
+            const runId = String(created['run_id'] ?? created['id'] ?? '');
             if (runId.length === 0) {
-              emit(created, opts.json === true);
-              return;
+              throw new Error(`could not resolve run id from response: ${JSON.stringify(created)}`);
             }
             const final = await pollUntilTerminal(() => c.planRuns.get(runId));
             emit(final, opts.json === true);
