@@ -1,5 +1,6 @@
 import type { JsonObject } from '../http/types.js';
 import type { DisseqtAgenticClient } from './client.js';
+import { runInIsolatedContext } from './context.js';
 import { SpanKind, type SpanKindInput } from './enums.js';
 import { AgenticAttributes, AgenticOperation } from './semantics.js';
 import type { DisseqtSpan, SpanAttributeValue } from './span.js';
@@ -87,11 +88,16 @@ export class TraceWrapper {
   }
 
   async run<T>(callback: (trace: DisseqtTrace) => T | Promise<T>): Promise<T> {
-    try {
-      return await callback(this.trace);
-    } finally {
-      this.close();
-    }
+    // Isolate this flow's current-trace/current-span state from any other
+    // concurrently running traced flow (see context.ts's runInIsolatedContext
+    // doc comment for why this is required).
+    return runInIsolatedContext(this.trace, async () => {
+      try {
+        return await callback(this.trace);
+      } finally {
+        this.close();
+      }
+    });
   }
 }
 
