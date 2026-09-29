@@ -103,6 +103,6 @@
   },
   "dependencies": {
     "commander": "^13.1.0",
-    "js-yaml": "^4.3.0"
+    "js-yaml": "^4.3.2"
   }
 }
