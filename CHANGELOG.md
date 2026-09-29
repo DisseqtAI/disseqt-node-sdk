@@ -4,6 +4,38 @@
 
 ### Fixed
 
+- **Consumer installs no longer fail with `MODULE_NOT_FOUND`.** `postinstall`
+  ran `scripts/compat-brace-expansion.cjs` on every install, but `scripts/`
+  is not part of the published package (`files` only ships `dist`,
+  `README.md`, `CHANGELOG.md`, `LICENSE`) — so `npm install @disseqt-ai/sdk`
+  has been failing for every consumer since this postinstall hook was
+  added. Moved the hook to `prepare`, which runs for this repo's own local
+  installs and CI, but never for a consumer installing the published
+  tarball. No action needed on your part; a fresh `npm install` now
+  succeeds.
+- **Production tracing now sends `X-Api-Key`/`X-Project-Id`/`X-Application-Id`
+  as HTTP headers**, not just inside the request body, matching the Python
+  SDK. A header-aware backend can now authenticate a trace upload before
+  reading the body. Body `resource.attributes` are unchanged for
+  compatibility with older backend versions.
+
+### Added
+
+- **`DisseqtAgenticClient` accepts an optional `applicationId` /
+  `application_id`.** When set, it's sent as `X-Application-Id` on every
+  trace upload. Optional and off by default — existing callers are
+  unaffected; some environments will require this in the future, ask your
+  Disseqt contact if you're unsure whether yours does.
+
+### Known limitation
+
+- A single `DisseqtAgenticClient` instance that traces more than one
+  project (via a per-trace `projectId` override rather than the client's
+  own) can batch spans for different projects into one HTTP POST whose
+  `X-Api-Key`/`X-Project-Id` headers reflect only the first span in that
+  batch — pre-existing in the body payload, now also true of the headers.
+  Use one client instance per project until this is addressed.
+
 - **`CreateRunRequest`'s `runName` now actually reaches the server.** Since
   this SDK's first release, `toPayload()` sent the run name under the key
   `"run_name"`, but the backend has only ever bound
