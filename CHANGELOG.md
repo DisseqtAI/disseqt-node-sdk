@@ -4,6 +4,28 @@
 
 ### Fixed
 
+- **Two concurrent traced requests using `startTrace(...).run(callback)` could
+  lose a nested span's parent link.** `getCurrentSpan()`/`setCurrentSpan()`
+  (used implicitly by `traceLlmCall`/`traceAgentAction`/`traceToolCall`/
+  `traceFunction` when you don't pass `parentSpanId` explicitly) stored state
+  in plain module-level variables shared by the whole process. If two
+  `startTrace(...).run(...)` calls overlapped (e.g. two concurrent requests
+  in an async server), one flow's nested span could come back with no parent
+  (`parentSpanId: ''`) instead of correctly nesting under its own flow's
+  parent span, once the other flow's span construction ran in between. Fixed
+  by isolating this state per logical async flow with Node's
+  `AsyncLocalStorage`, automatically applied to every `startTrace(...).run(...)`
+  call — no code change needed on your part for that pattern.
+
+  **Known limitation:** if you manage a trace imperatively instead — calling
+  `new DisseqtTrace(...)` / `new DisseqtSpan(...)` directly rather than using
+  `startTrace(...).run(callback)` (for example, starting a trace in one
+  middleware and adding spans across separate route handlers) — this fix does
+  not apply to you; that pattern still shares state across concurrent flows,
+  the same as before. Wrap that request's entire handling in the newly
+  exported `runInIsolatedContext(null, () => { ... })` to get the same
+  isolation.
+
 - **`CreateRunRequest`'s `runName` now actually reaches the server.** Since
   this SDK's first release, `toPayload()` sent the run name under the key
   `"run_name"`, but the backend has only ever bound

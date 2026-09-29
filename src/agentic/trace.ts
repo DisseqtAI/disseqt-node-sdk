@@ -56,6 +56,16 @@ export class DisseqtTrace {
     this.intentId = input.intentId ?? input.intent_id ?? null;
     this.workflowId = input.workflowId ?? input.workflow_id ?? null;
 
+    // Mutates whichever ContextStore is current (see context.ts) in
+    // place -- if this constructor runs while already inside an
+    // isolated context (e.g. a trace constructed inside another trace's
+    // runInIsolatedContext scope), it overwrites that OUTER flow's
+    // "current trace" with this one, with nothing to restore it
+    // afterward. Harmless today only because getCurrentTrace() has
+    // exactly one reader (the self-identity guard in end(), below) --
+    // if a second reader is ever added (e.g. auto-parenting nested
+    // traces), this becomes a real cross-flow leak and needs its own
+    // save/restore, same as DisseqtSpan's parentSpanContext handling.
     setCurrentTrace(this);
   }
 
