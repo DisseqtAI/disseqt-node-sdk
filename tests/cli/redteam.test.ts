@@ -27,6 +27,15 @@ const responseMap: Record<string, unknown> = {
     { id: 'a1', attack_type: 'jailbreak' },
     { id: 'a2', attack_type: 'toxicity' },
   ],
+  '/api/v1/mr-jailbreak/batch-automate': {
+    total_target_prompts: 2,
+    successful_jobs: 2,
+    failed_jobs: 0,
+    results: [
+      { target_prompt: 'obj-1', job_id: 'job-1', is_successful: true },
+      { target_prompt: 'obj-2', job_id: 'job-2', is_successful: false },
+    ],
+  },
   '/api/v1/jailbreak/analytics/summary': { total_prompts: 42, blocked: 3 },
   '/api/v1/jailbreak/analytics/prompts-stats': { avg_length: 55 },
 };
@@ -127,10 +136,11 @@ describe('disseqt redteam CLI', () => {
       'recommend',
       'parse-curl',
       'test-connection',
-      'eval-csv',
-      'eval-single-turn',
     ]) {
       expect(result.stdout).toContain(verb);
+    }
+    for (const verb of ['eval-csv', 'eval-single-turn']) {
+      expect(result.stdout).not.toContain(verb);
     }
   });
 
@@ -179,7 +189,24 @@ describe('disseqt redteam CLI', () => {
     expect(result.stderr).toMatch(/at most one/);
   });
 
-  it('attack --multi-turn POSTs to batch-automate', async () => {
+  it('attack --multi-turn POSTs a BatchAutomateJailbreakRequest and polls each job', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'disseqt-tpl-'));
+    const tplPath = join(dir, 'template.json');
+    const template = {
+      name: 'my-app',
+      description: 'support bot',
+      base_url: 'https://target.example',
+      integration_type: 'single-step',
+      send_step: {
+        step_order: 1,
+        step_name: 'send',
+        step_type: 'send',
+        api_endpoint: 'https://target.example/chat',
+        http_method: 'POST',
+      },
+    };
+    writeFileSync(tplPath, JSON.stringify(template), 'utf-8');
+    const before = requests.length;
     const result = await runCli([
       'redteam',
       'attack',
@@ -187,19 +214,54 @@ describe('disseqt redteam CLI', () => {
       '--technique',
       't1',
       '--target',
-      'tg1',
+      tplPath,
       '--prompt',
-      'obj',
+      'obj-1',
+      '--prompt',
+      'obj-2',
+      '--poll-interval',
+      '0.01',
     ]);
     expect(result.code).toBe(0);
     const req = findLast((r) => r.url === '/api/v1/mr-jailbreak/batch-automate');
-    expect(req).toBeDefined();
     expect(req?.method).toBe('POST');
     expect(JSON.parse(req?.body ?? '{}')).toEqual({
-      technique: 't1',
-      target: 'tg1',
-      objective: 'obj',
+      target_prompts: ['obj-1', 'obj-2'],
+      app_integration_template: template,
+      jailbreak_config: {
+        project_id: 'p',
+        job_name_prefix: 'cli',
+        app_name: 'my-app',
+        app_description_short: 'support bot',
+        app_type: 'chatbot',
+        max_depth: 3,
+        orchestration_mode: 'single',
+        technique_id: 't1',
+      },
+      ecid_prefix: 'cli',
+      ecid_start_number: 1,
     });
+    const seen = requests.slice(before).map((r) => r.url);
+    expect(seen).toContain('/api/v1/mr-jailbreak/jobs/job-1');
+    expect(seen).toContain('/api/v1/mr-jailbreak/jobs/job-2');
+    const out = JSON.parse(result.stdout) as { jobs: { status: string }[] };
+    expect(out.jobs.map((j) => j.status)).toEqual(['completed', 'completed']);
+  });
+
+  it('attack --multi-turn rejects more than 10 prompts', async () => {
+    const prompts = Array.from({ length: 11 }, (_, i) => ['--prompt', `p${i}`]).flat();
+    const result = await runCli([
+      'redteam',
+      'attack',
+      '--multi-turn',
+      '--technique',
+      't1',
+      '--target',
+      'x.json',
+      ...prompts,
+    ]);
+    expect(result.code).toBe(2);
+    expect(result.stderr).toMatch(/1\.\.10/);
   });
 
   it('attack rejects missing single-turn/multi-turn selection', async () => {
@@ -208,7 +270,7 @@ describe('disseqt redteam CLI', () => {
     expect(result.stderr).toMatch(/exactly one/);
   });
 
-  it('attack --single-turn creates session, run, polls, and fetches results', async () => {
+  it('attack --single-turn sends CreateTestingSessionRequest + CreateTestingRunRequest', async () => {
     const before = requests.length;
     const result = await runCli([
       'redteam',
@@ -217,20 +279,43 @@ describe('disseqt redteam CLI', () => {
       '--technique',
       't1',
       '--target',
-      'tg1',
-      '--prompt',
-      'hi',
+      'app-1',
+      '--pack',
+      'pack-1',
+      '--validator',
+      'toxicity',
       '--poll-interval',
       '0.01',
       '--max-wait',
       '5',
     ]);
     expect(result.code).toBe(0);
-    const seen = requests.slice(before).map((r) => `${r.method ?? ''} ${r.url ?? ''}`);
-    expect(seen).toContain('POST /api/v1/testing/sessions');
-    expect(seen.some((s) => s.startsWith('POST /api/v1/testing/sessions/'))).toBe(true);
-    expect(seen.some((s) => s.startsWith('GET /api/v1/testing/runs/'))).toBe(true);
-    expect(seen.some((s) => s.endsWith('/results'))).toBe(true);
+    const seen = requests.slice(before);
+    const session = seen.find((r) => r.url === '/api/v1/testing/sessions');
+    expect(session?.method).toBe('POST');
+    const sessionBody = JSON.parse(session?.body ?? '{}') as Record<string, unknown>;
+    expect(Object.keys(sessionBody).sort()).toEqual([
+      'application_context',
+      'name',
+      'target_config',
+      'testing_plan',
+    ]);
+    expect(sessionBody['target_config']).toEqual({ application_id: 'app-1' });
+    expect(sessionBody['testing_plan']).toEqual({
+      prompt_sources: [{ type: 'prompt_pack', config: { pack_ids: ['pack-1'] } }],
+      attack_strategies: [{ type: 'single_turn_jailbreak', techniques: ['t1'] }],
+      validators: ['toxicity'],
+      execution: { mode: 'sequential', stop_on_first_breach: false, max_total_prompts: 50 },
+    });
+    const run = seen.find((r) => r.url === '/api/v1/testing/sessions/test-id/runs');
+    expect(run?.method).toBe('POST');
+    expect(JSON.parse(run?.body ?? '{}')).toEqual({
+      trigger_metadata: { source: 'cli' },
+      application_id: 'app-1',
+    });
+    const urls = seen.map((r) => `${r.method ?? ''} ${r.url ?? ''}`);
+    expect(urls).toContain('GET /api/v1/testing/runs/test-id');
+    expect(urls).toContain('GET /api/v1/testing/runs/test-id/results');
   });
 
   it('session list hits /testing/sessions', async () => {
@@ -245,20 +330,26 @@ describe('disseqt redteam CLI', () => {
     expect(requests.at(-1)?.url).toBe('/api/v1/testing/sessions/s99');
   });
 
-  it('vuln-test POSTs to /vulnerabilities/{id}/test/poll', async () => {
-    const result = await runCli([
-      'redteam',
-      'vuln-test',
-      '--vulnerability',
-      'v1',
-      '--target',
-      'tg1',
-    ]);
+  it('vuln-test POSTs app_integration_id with project/org query params', async () => {
+    const result = await runCli(
+      ['redteam', 'vuln-test', '--vulnerability', 'v1', '--target', 'int-1'],
+      { DISSEQT_ORGANIZATION_ID: 'org-1' },
+    );
     expect(result.code).toBe(0);
     const req = requests.at(-1);
-    expect(req?.url).toBe('/api/v1/vulnerabilities/v1/test/poll');
+    expect(req?.url).toBe(
+      '/api/v1/vulnerabilities/v1/test/poll?project_id=p&organization_id=org-1',
+    );
     expect(req?.method).toBe('POST');
-    expect(JSON.parse(req?.body ?? '{}')).toEqual({ target: 'tg1' });
+    expect(JSON.parse(req?.body ?? '{}')).toEqual({ app_integration_id: 'int-1' });
+  });
+
+  it('vuln-test without an organization id exits 2', async () => {
+    const result = await runCli(
+      ['redteam', 'vuln-test', '--vulnerability', 'v1', '--target', 'int-1'],
+      { DISSEQT_ORGANIZATION_ID: '' },
+    );
+    expect(result.code).toBe(2);
   });
 
   it('validate POSTs the standard body shape', async () => {
@@ -332,10 +423,15 @@ describe('disseqt redteam CLI', () => {
     expect(requests.at(-1)?.url).toBe('/api/v1/testing/runs/r1/results');
   });
 
-  it('report --format=csv hits the server CSV endpoint', async () => {
-    const result = await runCli(['redteam', 'report', 's1', '--format', 'csv']);
+  it('report --format=csv --session hits the server CSV endpoint', async () => {
+    const result = await runCli(['redteam', 'report', '--format', 'csv', '--session', 's1']);
     expect(result.code).toBe(0);
     expect(requests.at(-1)?.url).toBe('/api/v1/testing/sessions/s1/report/csv');
+  });
+
+  it('report --format=csv without --session exits 2', async () => {
+    const result = await runCli(['redteam', 'report', 'r1', '--format', 'csv']);
+    expect(result.code).toBe(2);
   });
 
   it('analytics --summary hits only the summary endpoint', async () => {
@@ -353,15 +449,45 @@ describe('disseqt redteam CLI', () => {
     expect(result.code).toBe(2);
   });
 
-  it('recommend packs --context POSTs to bot endpoint', async () => {
-    const result = await runCli(['redteam', 'recommend', 'packs', '--context', 'financial app']);
+  it('recommend packs POSTs {app_name, app_description}', async () => {
+    const result = await runCli([
+      'redteam',
+      'recommend',
+      'packs',
+      '--app-name',
+      'bank-bot',
+      '--app-description',
+      'financial assistant',
+    ]);
     expect(result.code).toBe(0);
     const req = requests.at(-1);
     expect(req?.url).toBe('/api/v1/testing/bot/recommend-packs');
-    expect(JSON.parse(req?.body ?? '{}')).toEqual({ context: 'financial app' });
+    expect(JSON.parse(req?.body ?? '{}')).toEqual({
+      app_name: 'bank-bot',
+      app_description: 'financial assistant',
+    });
   });
 
-  it('recommend without --context or --config exits 2', async () => {
+  it('recommend attacks POSTs {app_description} only', async () => {
+    const result = await runCli([
+      'redteam',
+      'recommend',
+      'attacks',
+      '--app-description',
+      'financial assistant',
+    ]);
+    expect(result.code).toBe(0);
+    expect(JSON.parse(requests.at(-1)?.body ?? '{}')).toEqual({
+      app_description: 'financial assistant',
+    });
+  });
+
+  it('recommend packs without --app-name exits 2', async () => {
+    const result = await runCli(['redteam', 'recommend', 'packs', '--app-description', 'x']);
+    expect(result.code).toBe(2);
+  });
+
+  it('recommend without --app-description or --config exits 2', async () => {
     const result = await runCli(['redteam', 'recommend', 'attacks']);
     expect(result.code).toBe(2);
   });
@@ -374,77 +500,56 @@ describe('disseqt redteam CLI', () => {
     expect(result.code).toBe(0);
     const req = requests.at(-1);
     expect(req?.url).toBe('/api/v1/testing/bot/parse-curl');
-    expect(JSON.parse(req?.body ?? '{}').curl).toContain('curl');
+    expect(JSON.parse(req?.body ?? '{}')).toEqual({
+      curl_command: 'curl -X POST https://api.example.com',
+    });
   });
 
-  it('test-connection --target provider/model splits correctly', async () => {
-    const result = await runCli(['redteam', 'test-connection', '--target', 'openai/gpt-4o']);
+  it('test-connection sends the flat body with api_key from --api-key-env', async () => {
+    const result = await runCli(
+      [
+        'redteam',
+        'test-connection',
+        '--endpoint',
+        'https://t.example/v1',
+        '--provider',
+        'openai',
+        '--model',
+        'gpt-4o',
+        '--api-key-env',
+        'TARGET_KEY',
+      ],
+      { TARGET_KEY: 'sk-target' },
+    );
     expect(result.code).toBe(0);
     const req = requests.at(-1);
     expect(req?.url).toBe('/api/v1/testing/bot/test-connection');
     expect(JSON.parse(req?.body ?? '{}')).toEqual({
-      target: { provider: 'openai', model: 'gpt-4o' },
+      api_key: 'sk-target',
+      endpoint: 'https://t.example/v1',
+      provider: 'openai',
+      model: 'gpt-4o',
     });
   });
 
-  it('test-connection --target with no slash uses id form', async () => {
-    const result = await runCli(['redteam', 'test-connection', '--target', 'my-target']);
-    expect(result.code).toBe(0);
-    expect(JSON.parse(requests.at(-1)?.body ?? '{}')).toEqual({
-      target: { id: 'my-target' },
-    });
+  it('test-connection without an api key exits 2', async () => {
+    const result = await runCli(['redteam', 'test-connection', '--provider', 'openai']);
+    expect(result.code).toBe(2);
   });
 
-  it('eval-csv uploads a multipart POST', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'disseqt-csv-'));
-    const path = join(dir, 'prompts.csv');
-    writeFileSync(path, 'input\nprompt-1\nprompt-2\n', 'utf-8');
-    const result = await runCli(['redteam', 'eval-csv', path]);
-    expect(result.code).toBe(0);
-    const req = requests.at(-1);
-    expect(req?.url).toBe('/api/v1/jailbreak/evaluate-csv');
-    expect(req?.method).toBe('POST');
-    expect(req?.contentType).toMatch(/multipart\/form-data/);
-    // Multipart body contains the CSV rows verbatim.
-    expect(req?.body).toContain('prompt-1');
-  });
-
-  it('eval-single-turn --format=json emits JSON payload', async () => {
-    const result = await runCli([
-      'redteam',
-      'eval-single-turn',
-      '--input',
-      'hi',
-      '--technique',
-      't1',
-      '--format',
-      'json',
-    ]);
-    expect(result.code).toBe(0);
-    const req = requests.at(-1);
-    expect(req?.url).toBe('/api/v1/jailbreak/single-turn-evaluate');
-    expect(JSON.parse(req?.body ?? '{}')).toEqual({ input: 'hi', technique: 't1' });
-    // stdout is JSON.
-    expect(() => JSON.parse(result.stdout)).not.toThrow();
-  });
-
-  it('eval-single-turn default text format prints verdict line', async () => {
-    const result = await runCli(['redteam', 'eval-single-turn', '--input', 'hi']);
-    expect(result.code).toBe(0);
-    expect(result.stdout).toMatch(/verdict:/);
-  });
-
-  it('run <config.yaml> POSTs session then run', async () => {
+  it('run <config.yaml> POSTs CreateTestingSessionRequest then CreateTestingRunRequest', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'disseqt-yaml-'));
     const path = join(dir, 'run.yaml');
     writeFileSync(
       path,
       [
-        'target:',
-        '  id: my-target',
+        'name: nightly',
+        'run_name: nightly-1',
+        'target_config:',
+        '  application_id: app-9',
         'techniques:',
         '  - t1',
-        'vulnerabilities:',
+        'validators:',
         '  - v1',
         '',
       ].join('\n'),
@@ -455,16 +560,37 @@ describe('disseqt redteam CLI', () => {
     expect(result.code).toBe(0);
     const seen = requests.slice(before);
     expect(seen[0]?.url).toBe('/api/v1/testing/sessions');
-    expect(seen[1]?.url).toContain('/api/v1/testing/sessions/');
-    expect(seen[1]?.url).toContain('/runs');
+    const sessionBody = JSON.parse(seen[0]?.body ?? '{}') as Record<string, unknown>;
+    expect(sessionBody['name']).toBe('nightly');
+    expect(sessionBody['application_context']).toEqual({});
+    expect(sessionBody['target_config']).toEqual({ application_id: 'app-9' });
+    expect(sessionBody['testing_plan']).toMatchObject({
+      prompt_sources: [],
+      attack_strategies: [{ type: 'single_turn_jailbreak', techniques: ['t1'] }],
+      validators: ['v1'],
+    });
+    expect(seen[1]?.url).toBe('/api/v1/testing/sessions/test-id/runs');
+    expect(JSON.parse(seen[1]?.body ?? '{}')).toEqual({
+      run_name: 'nightly-1',
+      trigger_metadata: { source: 'cli' },
+      application_id: 'app-9',
+    });
   });
 
-  it('vulnerability test <id> --target packages the body', async () => {
-    const result = await runCli(['vulnerability', 'test', 'v1', '--target', 'tg1']);
+  it('vulnerability test <id> --target sends app_integration_id + scope query', async () => {
+    const result = await runCli([
+      'vulnerability',
+      'test',
+      'v1',
+      '--target',
+      'int-1',
+      '--organization-id',
+      'org-1',
+    ]);
     expect(result.code).toBe(0);
     const req = requests.at(-1);
-    expect(req?.url).toBe('/api/v1/vulnerabilities/v1/test');
+    expect(req?.url).toBe('/api/v1/vulnerabilities/v1/test?project_id=p&organization_id=org-1');
     expect(req?.method).toBe('POST');
-    expect(JSON.parse(req?.body ?? '{}')).toEqual({ target: 'tg1' });
+    expect(JSON.parse(req?.body ?? '{}')).toEqual({ app_integration_id: 'int-1' });
   });
 });

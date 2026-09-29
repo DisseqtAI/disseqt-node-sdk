@@ -1,11 +1,11 @@
-import type { DisseqtRequestOptions, JsonObject, JsonValue, QueryParams } from '../http/types.js';
+import type { JsonObject, JsonValue, QueryParams } from '../http/types.js';
 import { ResourceBase } from './base.js';
 
 // Mirrors the Python SDK's `disseqt redteam` surface (src/disseqt_sdk/cli/redteam.py).
 // Endpoints span two backends fronted by the same host:
 //   /api/v1/testing/*         — single-turn sessions/runs/validation
 //   /api/v1/mr-jailbreak/*    — multi-turn (batch-automate + agents)
-//   /api/v1/jailbreak/*       — analytics + CSV eval + single-turn scorer
+//   /api/v1/jailbreak/*       — analytics
 //   /api/v1/testing/bot/*     — bot helpers (recommend/parse-curl/test-connection)
 // Every method here maps 1:1 to a Python `_http.request` call — no invention.
 
@@ -240,61 +240,13 @@ export class RedteamClient extends ResourceBase {
     return this._request('POST', `${BOT}/recommend-${kind}`, { json: payload });
   }
 
-  /** POST /api/v1/testing/bot/parse-curl */
+  /** POST /api/v1/testing/bot/parse-curl — `{curl_command}` (testing_bot_handlers.go). */
   parseCurl(curl: string): Promise<JsonObject> {
-    return this._request('POST', `${BOT}/parse-curl`, { json: { curl } });
+    return this._request('POST', `${BOT}/parse-curl`, { json: { curl_command: curl } });
   }
 
   /** POST /api/v1/testing/bot/test-connection */
   testConnection(payload: JsonValue): Promise<JsonObject> {
     return this._request('POST', `${BOT}/test-connection`, { json: payload });
-  }
-
-  // ---------------------------------------------------------------------
-  // Bulk / single-turn eval
-  // ---------------------------------------------------------------------
-
-  /**
-   * POST /api/v1/jailbreak/evaluate-csv — multipart CSV upload.
-   * `filename` propagates to the multipart part; server uses it for the
-   * job name. `content` is the CSV text.
-   */
-  evaluateCsv(filename: string, content: string): Promise<JsonObject> {
-    const form = new FormData();
-    // Blob binds Content-Type at the part level; server-side FastAPI reads
-    // both the filename and mimetype.
-    const blob = new Blob([content], { type: 'text/csv' });
-    form.append('file', blob, filename);
-    const req: DisseqtRequestOptions = {
-      method: 'POST',
-      url: `${this.baseUrl}${JB}/evaluate-csv`,
-      body: form,
-      includeContentType: false,
-    };
-    return this.transport.requestJson(req);
-  }
-
-  /**
-   * GET /api/v1/jailbreak/evaluate-csv/{jobId} — poll status for evaluate-csv.
-   *
-   * Backend jailbreak_routes.go:55 registers the status GET on
-   * /evaluate-csv/:generation_job_id. The prior /jobs/:id/process was a
-   * method-and-path mismatch — /jobs/:id/process is a POST trigger
-   * (jailbreak_routes.go:45), not a GET status probe.
-   */
-  evaluateCsvJob(jobId: string): Promise<JsonObject> {
-    return this._request('GET', `${JB}/evaluate-csv/${jobId}`);
-  }
-
-  /** POST /api/v1/jailbreak/single-turn-evaluate — one-prompt scorer. */
-  singleTurnEvaluate(payload: {
-    input: string;
-    technique?: string;
-    vulnerability?: string;
-  }): Promise<JsonObject> {
-    const body: JsonObject = { input: payload.input };
-    if (payload.technique !== undefined) body['technique'] = payload.technique;
-    if (payload.vulnerability !== undefined) body['vulnerability'] = payload.vulnerability;
-    return this._request('POST', `${JB}/single-turn-evaluate`, { json: body });
   }
 }

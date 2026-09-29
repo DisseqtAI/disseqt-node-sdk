@@ -1,16 +1,20 @@
-import { readFileSync } from 'node:fs';
-import { writeFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 
 import type { Command } from 'commander';
 import { load as yamlLoad } from 'js-yaml';
 
 import type { RedteamClient, RedteamValidateRequest } from '../../resources/redteam.js';
-import type { JsonObject } from '../../http/types.js';
+import { DisseqtHttpError } from '../../http/errors.js';
+import type { JsonObject, JsonValue } from '../../http/types.js';
+import { readBody } from '../parse.js';
 import { buildClient, emit, EXIT_USAGE, runAction } from '../config.js';
 
-// Every subcommand mirrors `disseqt redteam <verb>` in the Python SDK
-// (src/disseqt_sdk/cli/redteam.py). Flag names + defaults + JSON output
-// shape are held identical — the cross-SDK diff in tests keeps drift honest.
+// Request bodies mirror the Go structs in disseqt-dataset-backend:
+//   api/testing_types.go            CreateTestingSessionRequest / CreateTestingRunRequest
+//   pkg/testing/pipeline.go         TestingPlanConfig
+//   api/mr_jailbreak_batch_automation.go  BatchAutomateJailbreakRequest
+//   api/testing_bot_types.go + testing_bot_handlers.go  bot helpers
+//   api/vulnerability_types.go      VulnerabilityTestRequest
 
 interface CommonOpts {
   json?: boolean;
@@ -18,8 +22,13 @@ interface CommonOpts {
 
 const commonJson = (cmd: Command): Command => cmd.option('--json', 'emit JSON output', false);
 
+const MAX_TARGET_PROMPTS = 10;
+const DEFAULT_MAX_DEPTH = 3;
+const DEFAULT_MAX_TOTAL_PROMPTS = 50;
+
 const TERMINAL = new Set([
   'completed',
+  'completed_with_errors',
   'complete',
   'failed',
   'cancelled',
@@ -72,9 +81,14 @@ const expandEnv = (value: unknown): unknown => {
   return value;
 };
 
+const isObject = (v: unknown): v is JsonObject =>
+  v !== null && typeof v === 'object' && !Array.isArray(v);
+
+const collect = (value: string, previous: string[]): string[] => [...previous, value];
+
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
-/** Poll `probe()` until status ∈ TERMINAL or `maxWaitMs` elapses. */
+/** Poll `probe()` until status ∈ TERMINAL; throws once `maxWaitMs` elapses. */
 const pollUntilTerminal = async <T extends JsonObject>(
   probe: () => Promise<T>,
   pollIntervalMs: number,
@@ -85,13 +99,48 @@ const pollUntilTerminal = async <T extends JsonObject>(
   for (;;) {
     const state = String(last['status'] ?? last['state'] ?? '').toLowerCase();
     if (TERMINAL.has(state)) return last;
-    if (Date.now() >= deadline) return last;
+    if (Date.now() >= deadline) {
+      throw new Error(
+        `did not finish within ${maxWaitMs / 1000}s (last status: "${state || '?'}")`,
+      );
+    }
     await sleep(pollIntervalMs);
     last = await probe();
   }
 };
 
-// -------- output formatters (report / analytics / eval-single-turn) --------
+/** `TestingPlanConfig` (pkg/testing/pipeline.go) from CLI-level inputs. */
+const buildTestingPlan = (input: {
+  techniques: string[];
+  packs: string[];
+  validators: string[];
+  maxTotalPrompts?: number;
+}): JsonObject => ({
+  prompt_sources:
+    input.packs.length > 0 ? [{ type: 'prompt_pack', config: { pack_ids: input.packs } }] : [],
+  attack_strategies: [{ type: 'single_turn_jailbreak', techniques: input.techniques }],
+  validators: input.validators,
+  execution: {
+    mode: 'sequential',
+    stop_on_first_breach: false,
+    max_total_prompts: input.maxTotalPrompts ?? DEFAULT_MAX_TOTAL_PROMPTS,
+  },
+});
+
+/** `CreateTestingRunRequest` (api/testing_types.go): run_name, trigger_metadata, application_id. */
+const buildRunBody = (runName: string | undefined, applicationId: unknown): JsonObject => {
+  const body: JsonObject = { trigger_metadata: { source: 'cli' } };
+  if (runName !== undefined) body['run_name'] = runName;
+  if (typeof applicationId === 'string' && applicationId.length > 0) {
+    body['application_id'] = applicationId;
+  }
+  return body;
+};
+
+const isNotFound = (error: unknown): boolean =>
+  error instanceof DisseqtHttpError && error.statusCode === 404;
+
+// -------- output formatters (report / analytics) --------
 
 const stringifyCell = (v: unknown): string => {
   if (v === null || v === undefined) return '';
@@ -109,24 +158,24 @@ const extractRows = (payload: unknown): unknown[] => {
   return [];
 };
 
+const collectHeaders = (rows: unknown[]): string[] => {
+  const headers: string[] = [];
+  for (const row of rows) {
+    if (isObject(row)) {
+      for (const k of Object.keys(row)) if (!headers.includes(k)) headers.push(k);
+    }
+  }
+  return headers;
+};
+
 const resultsToCsv = (payload: unknown): string => {
   const rows = extractRows(payload);
   if (rows.length === 0) return '';
-  const headers: string[] = [];
-  for (const row of rows) {
-    if (row !== null && typeof row === 'object' && !Array.isArray(row)) {
-      for (const k of Object.keys(row as Record<string, unknown>)) {
-        if (!headers.includes(k)) headers.push(k);
-      }
-    }
-  }
+  const headers = collectHeaders(rows);
   const escape = (s: string): string => (/[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s);
   const lines = [headers.map(escape).join(',')];
   for (const row of rows) {
-    if (row !== null && typeof row === 'object' && !Array.isArray(row)) {
-      const record = row as Record<string, unknown>;
-      lines.push(headers.map((h) => escape(stringifyCell(record[h]))).join(','));
-    }
+    if (isObject(row)) lines.push(headers.map((h) => escape(stringifyCell(row[h]))).join(','));
   }
   return `${lines.join('\n')}\n`;
 };
@@ -134,20 +183,10 @@ const resultsToCsv = (payload: unknown): string => {
 const resultsToMarkdown = (payload: unknown): string => {
   const rows = extractRows(payload);
   if (rows.length === 0) return '_no results_\n';
-  const headers: string[] = [];
-  for (const row of rows) {
-    if (row !== null && typeof row === 'object' && !Array.isArray(row)) {
-      for (const k of Object.keys(row as Record<string, unknown>)) {
-        if (!headers.includes(k)) headers.push(k);
-      }
-    }
-  }
+  const headers = collectHeaders(rows);
   const lines = [`| ${headers.join(' | ')} |`, `| ${headers.map(() => '---').join(' | ')} |`];
   for (const row of rows) {
-    if (row !== null && typeof row === 'object' && !Array.isArray(row)) {
-      const record = row as Record<string, unknown>;
-      lines.push(`| ${headers.map((h) => stringifyCell(record[h])).join(' | ')} |`);
-    }
+    if (isObject(row)) lines.push(`| ${headers.map((h) => stringifyCell(row[h])).join(' | ')} |`);
   }
   return `${lines.join('\n')}\n`;
 };
@@ -240,12 +279,25 @@ export function registerRedteam(program: Command): void {
   cmd
     .command('attack')
     .description('run one red-team attack end to end')
-    .option('--single-turn', 'run a single-turn attack', false)
-    .option('--multi-turn', 'run a multi-turn attack', false)
-    .requiredOption('--technique <id>', 'attack technique id or name')
-    .requiredOption('--target <id>', 'target model identifier / integration id')
-    .option('--prompt <text>', 'seed prompt (single-turn) or objective (multi-turn)')
-    .option('--poll-interval <seconds>', 'seconds between run status polls', '2')
+    .option('--single-turn', 'run a single-turn attack (testing sessions/runs)', false)
+    .option('--multi-turn', 'run a multi-turn attack (mr-jailbreak batch-automate)', false)
+    .requiredOption('--technique <id>', 'attack technique id (single-turn key or multi-turn uuid)')
+    .requiredOption(
+      '--target <id|file>',
+      'single-turn: application_id; multi-turn: JSON file with the app_integration_template',
+    )
+    .option('--prompt <text>', 'multi-turn target prompt (repeatable, 1..10)', collect, [])
+    .option('--pack <id>', 'single-turn prompt pack id (repeatable)', collect, [])
+    .option('--validator <name>', 'single-turn validator (repeatable)', collect, [])
+    .option('--name <name>', 'session / job name prefix', 'cli')
+    .option('--app-name <name>', 'multi-turn app_name (default: template name)')
+    .option(
+      '--app-description <text>',
+      'multi-turn app_description_short (default: template description)',
+    )
+    .option('--app-type <type>', 'multi-turn app_type', 'chatbot')
+    .option('--max-depth <n>', 'multi-turn max_depth (1..10)', String(DEFAULT_MAX_DEPTH))
+    .option('--poll-interval <seconds>', 'seconds between status polls', '2')
     .option('--max-wait <seconds>', 'max seconds to wait for the run to finish', '300')
     .action(
       async (opts: {
@@ -253,7 +305,14 @@ export function registerRedteam(program: Command): void {
         multiTurn?: boolean;
         technique: string;
         target: string;
-        prompt?: string;
+        prompt: string[];
+        pack: string[];
+        validator: string[];
+        name: string;
+        appName?: string;
+        appDescription?: string;
+        appType: string;
+        maxDepth: string;
         pollInterval: string;
         maxWait: string;
       }) => {
@@ -263,37 +322,75 @@ export function registerRedteam(program: Command): void {
         const pollMs = Math.round(Number(opts.pollInterval) * 1000);
         const maxMs = Math.round(Number(opts.maxWait) * 1000);
 
+        if (opts.multiTurn === true) {
+          if (opts.prompt.length === 0 || opts.prompt.length > MAX_TARGET_PROMPTS) {
+            usage(`--multi-turn needs 1..${MAX_TARGET_PROMPTS} --prompt values`);
+          }
+          if (!existsSync(opts.target)) {
+            usage('--multi-turn needs --target <file> holding the app_integration_template JSON');
+          }
+          const template = readJsonFile(opts.target);
+          const maxDepth = Number(opts.maxDepth);
+          if (!Number.isInteger(maxDepth) || maxDepth < 1 || maxDepth > 10) {
+            usage('--max-depth must be an integer in 1..10');
+          }
+          await runAction(async () => {
+            const client = buildClient();
+            const body: JsonObject = {
+              target_prompts: opts.prompt,
+              app_integration_template: template,
+              jailbreak_config: {
+                project_id: client.transport.projectId,
+                job_name_prefix: opts.name,
+                app_name: opts.appName ?? String(template['name'] ?? opts.name),
+                app_description_short:
+                  opts.appDescription ?? String(template['description'] ?? template['name'] ?? ''),
+                app_type: opts.appType,
+                max_depth: maxDepth,
+                orchestration_mode: 'single',
+                technique_id: opts.technique,
+              },
+              ecid_prefix: 'cli',
+              ecid_start_number: 1,
+            };
+            const batch = await client.redteam.batchAutomate(body);
+            const jobs: JsonObject[] = [];
+            for (const row of extractRows(batch)) {
+              const jobId = resolveId(row, 'job_id');
+              if (jobId === null) continue;
+              jobs.push(
+                await pollUntilTerminal(() => client.redteam.getMrJob(jobId), pollMs, maxMs),
+              );
+            }
+            emit({ ...batch, jobs }, true);
+          });
+          return;
+        }
+
         await runAction(async () => {
           const client = rt();
-          if (opts.multiTurn === true) {
-            const result = await client.batchAutomate({
-              technique: opts.technique,
-              target: opts.target,
-              objective: opts.prompt ?? '',
-            });
-            emit(result, true);
-            return;
-          }
-          const session = await client.createSession({ target: opts.target });
+          const session = await client.createSession({
+            name: `${opts.name}-${opts.technique}-${Date.now()}`,
+            application_context: {},
+            target_config: { application_id: opts.target },
+            testing_plan: buildTestingPlan({
+              techniques: [opts.technique],
+              packs: opts.pack,
+              validators: opts.validator,
+            }),
+          });
           const sessionId = resolveId(session, 'id', 'session_id');
           if (sessionId === null) {
             throw new Error(
               `could not resolve session id from response: ${JSON.stringify(session)}`,
             );
           }
-          const run = await client.createRun(sessionId, {
-            technique: opts.technique,
-            prompt: opts.prompt ?? '',
-          });
+          const run = await client.createRun(sessionId, buildRunBody(undefined, opts.target));
           const runId = resolveId(run, 'id', 'run_id');
           if (runId === null) {
             throw new Error(`could not resolve run id from response: ${JSON.stringify(run)}`);
           }
           const final = await pollUntilTerminal(() => client.getRun(runId), pollMs, maxMs);
-          const state = String(final['status'] ?? final['state'] ?? '').toLowerCase();
-          if (!TERMINAL.has(state)) {
-            throw new Error(`run ${runId} did not finish within ${opts.maxWait}s`);
-          }
           const results = await client.getRunResults(runId);
           emit({ status: final, results }, true);
         });
@@ -301,7 +398,7 @@ export function registerRedteam(program: Command): void {
     );
 
   // -------------------------------------------------------------------
-  // session list / get (mirrors `disseqt redteam session ...` in Python)
+  // session list / get
   // -------------------------------------------------------------------
 
   const sessionCmd = cmd.command('session').description('inspect red-team sessions');
@@ -320,15 +417,40 @@ export function registerRedteam(program: Command): void {
     .command('vuln-test')
     .description('run the polling vuln-test endpoint for one vulnerability')
     .requiredOption('--vulnerability <id>', 'vulnerability id to test')
-    .requiredOption('--target <id>', 'target model identifier / integration id')
-    .action(async (opts: { vulnerability: string; target: string }) => {
-      await runAction(async () =>
-        emit(
-          await buildClient().vulnerabilities.testPoll(opts.vulnerability, { target: opts.target }),
-          true,
-        ),
-      );
-    });
+    .option('--target <id>', 'app integration id (sent as app_integration_id)')
+    .option('--llm-config <json|file|->', 'llm_config object instead of --target')
+    .option(
+      '--organization-id <id>',
+      'organization scope (query param; default env DISSEQT_ORGANIZATION_ID)',
+    )
+    .action(
+      async (opts: {
+        vulnerability: string;
+        target?: string;
+        llmConfig?: string;
+        organizationId?: string;
+      }) => {
+        const orgId = opts.organizationId ?? process.env['DISSEQT_ORGANIZATION_ID'] ?? '';
+        if (orgId.length === 0) usage('pass --organization-id or set DISSEQT_ORGANIZATION_ID');
+        if ((opts.target === undefined) === (opts.llmConfig === undefined)) {
+          usage('pass exactly one of --target or --llm-config');
+        }
+        const body: JsonObject =
+          opts.target !== undefined
+            ? { app_integration_id: opts.target }
+            : { llm_config: readBody(opts.llmConfig) as JsonValue };
+        await runAction(async () => {
+          const client = buildClient();
+          emit(
+            await client.vulnerabilities.testPoll(opts.vulnerability, body, {
+              project_id: client.transport.projectId,
+              organization_id: orgId,
+            }),
+            true,
+          );
+        });
+      },
+    );
 
   // -------------------------------------------------------------------
   // run [config.yaml] — end-to-end suite from YAML
@@ -336,38 +458,47 @@ export function registerRedteam(program: Command): void {
 
   cmd
     .command('run [configPath]')
-    .description('run a full red-team suite from a YAML CONFIG_PATH')
-    .option('--json', 'emit the raw job payload', false)
+    .description(
+      'create a testing session + run from YAML (keys: name, application_context, target_config, testing_plan | techniques/packs/validators, run_name)',
+    )
+    .option('--json', 'emit the raw session + run payloads', false)
     .action(async (configPath: string | undefined, opts: CommonOpts) => {
       if (configPath === undefined) {
         usage('provide a config path (interactive prompts unsupported in Node CLI)');
       }
       await runAction(async () => {
-        const rawConfig = readYamlFile(configPath as string);
-        const config = expandEnv(rawConfig) as Record<string, unknown>;
-        const target = (config['target'] as JsonObject | undefined) ?? {};
-        const sessionBody: Record<string, unknown> = { target };
-        for (const key of [
-          'vulnerabilities',
-          'personas',
-          'concurrency',
-          'max_depth',
-          'stop_on_first_success',
-        ]) {
-          if (config[key] !== undefined) sessionBody[key] = config[key];
-        }
+        const config = expandEnv(readYamlFile(configPath as string)) as JsonObject;
+        const targetConfig = isObject(config['target_config'])
+          ? config['target_config']
+          : isObject(config['target'])
+            ? config['target']
+            : {};
+        const asList = (v: unknown): string[] => (Array.isArray(v) ? v.map(String) : []);
+        const sessionBody: JsonObject = {
+          name: String(config['name'] ?? `cli-run-${Date.now()}`),
+          application_context: isObject(config['application_context'])
+            ? config['application_context']
+            : {},
+          target_config: targetConfig,
+          testing_plan: isObject(config['testing_plan'])
+            ? config['testing_plan']
+            : buildTestingPlan({
+                techniques: asList(config['techniques']),
+                packs: asList(config['packs']),
+                validators: asList(config['validators']),
+              }),
+        };
         const client = rt();
         const session = await client.createSession(sessionBody);
         const sessionId = resolveId(session, 'id', 'session_id');
         if (sessionId === null) {
           throw new Error(`could not resolve session id from response: ${JSON.stringify(session)}`);
         }
-        const runBody: JsonObject = {
-          techniques: (config['techniques'] as unknown[] | undefined) ?? [],
-          personas: (config['personas'] as unknown[] | undefined) ?? [],
-          vulnerabilities: (config['vulnerabilities'] as unknown[] | undefined) ?? [],
-        };
-        const launched = await client.createRun(sessionId, runBody);
+        const runName = typeof config['run_name'] === 'string' ? config['run_name'] : undefined;
+        const launched = await client.createRun(
+          sessionId,
+          buildRunBody(runName, targetConfig['application_id']),
+        );
         if (opts.json === true) {
           emit({ session, run: launched }, true);
           return;
@@ -421,13 +552,14 @@ export function registerRedteam(program: Command): void {
 
   cmd
     .command('status <jobId>')
-    .description('fetch status for a running/completed job or run')
+    .description('fetch status for a testing run, falling back to an mr-jailbreak job on 404')
     .action(async (jobId: string) => {
       await runAction(async () => {
         const client = rt();
         try {
           emit(await client.getRun(jobId), true);
-        } catch {
+        } catch (error) {
+          if (!isNotFound(error)) throw error;
           emit(await client.getMrJob(jobId), true);
         }
       });
@@ -442,34 +574,42 @@ export function registerRedteam(program: Command): void {
 
   cmd
     .command('results <jobId>')
-    .description('pretty-print results for a completed job or run')
+    .description('results for a testing run, falling back to mr-jailbreak interactions on 404')
     .action(async (jobId: string) => {
       await runAction(async () => {
         const client = rt();
         try {
           emit(await client.getRunResults(jobId), true);
-        } catch {
+        } catch (error) {
+          if (!isNotFound(error)) throw error;
           emit(await client.getMrJobInteractions(jobId), true);
         }
       });
     });
 
   // -------------------------------------------------------------------
-  // report <jobId> --format {json,csv,markdown}
+  // report [runId] --format {json,csv,markdown} [--session <id>]
   // -------------------------------------------------------------------
 
   cmd
-    .command('report <jobId>')
-    .description('export a report for a completed job')
+    .command('report [runId]')
+    .description('export a report: json|markdown from a run id, csv from --session <id>')
     .option('--format <fmt>', 'json | csv | markdown', 'json')
-    .action(async (jobId: string, opts: { format: string }) => {
+    .option('--session <id>', 'session id for --format csv (GET /sessions/{id}/report/csv)')
+    .action(async (runId: string | undefined, opts: { format: string; session?: string }) => {
       if (!['json', 'csv', 'markdown'].includes(opts.format)) {
         usage(`--format must be one of json|csv|markdown (got "${opts.format}")`);
+      }
+      if (opts.format === 'csv' && opts.session === undefined) {
+        usage('--format csv requires --session <id>');
+      }
+      if (opts.format !== 'csv' && runId === undefined) {
+        usage(`--format ${opts.format} requires a run id`);
       }
       await runAction(async () => {
         const client = rt();
         if (opts.format === 'csv') {
-          const raw = await client.sessionReportCsv(jobId);
+          const raw = await client.sessionReportCsv(opts.session as string);
           const ct = raw.headers.get('content-type') ?? '';
           if (ct.includes('text/csv') || (!ct.includes('json') && raw.text.length > 0)) {
             process.stdout.write(raw.text);
@@ -479,7 +619,7 @@ export function registerRedteam(program: Command): void {
           process.stdout.write(resultsToCsv(parsed));
           return;
         }
-        const payload = await client.getRunResults(jobId);
+        const payload = await client.getRunResults(runId as string);
         if (opts.format === 'json') {
           emit(payload, true);
           return;
@@ -540,24 +680,35 @@ export function registerRedteam(program: Command): void {
   cmd
     .command('recommend <kind>')
     .description('ask the bot to recommend packs / attacks / validators')
-    .option('--context <text>', 'free-form context string')
-    .option('--config <path>', 'JSON body to send instead of --context')
-    .action(async (kind: string, opts: { context?: string; config?: string }) => {
-      if (!['packs', 'attacks', 'validators'].includes(kind)) {
-        usage(`kind must be one of packs|attacks|validators (got "${kind}")`);
-      }
-      if (opts.context === undefined && opts.config === undefined) {
-        usage('pass --context or --config FILE');
-      }
-      if (opts.context !== undefined && opts.config !== undefined) {
-        usage('pass exactly one of --context or --config');
-      }
-      await runAction(async () => {
-        const body =
-          opts.config !== undefined ? readJsonFile(opts.config) : { context: opts.context ?? '' };
-        emit(await rt().recommend(kind as 'packs' | 'attacks' | 'validators', body), true);
-      });
-    });
+    .option('--app-name <name>', 'app_name (required for packs)')
+    .option('--app-description <text>', 'app_description (min 10 chars for packs)')
+    .option('--config <path>', 'JSON body to send instead of the flags')
+    .action(
+      async (
+        kind: string,
+        opts: { appName?: string; appDescription?: string; config?: string },
+      ) => {
+        if (!['packs', 'attacks', 'validators'].includes(kind)) {
+          usage(`kind must be one of packs|attacks|validators (got "${kind}")`);
+        }
+        let body: JsonObject;
+        if (opts.config !== undefined) {
+          body = readJsonFile(opts.config);
+        } else {
+          if (opts.appDescription === undefined) usage('pass --app-description or --config FILE');
+          if (kind === 'packs' && opts.appName === undefined) {
+            usage('recommend packs requires --app-name');
+          }
+          body =
+            kind === 'packs'
+              ? { app_name: opts.appName ?? '', app_description: opts.appDescription ?? '' }
+              : { app_description: opts.appDescription ?? '' };
+        }
+        await runAction(async () =>
+          emit(await rt().recommend(kind as 'packs' | 'attacks' | 'validators', body), true),
+        );
+      },
+    );
 
   // -------------------------------------------------------------------
   // parse-curl [source] --stdin
@@ -582,117 +733,45 @@ export function registerRedteam(program: Command): void {
     });
 
   // -------------------------------------------------------------------
-  // test-connection --target --config
+  // test-connection
   // -------------------------------------------------------------------
 
   cmd
     .command('test-connection')
     .description('ping the target model through the bot connectivity endpoint')
-    .option('--target <spec>', 'target as provider/model (e.g. openai/gpt-4o)')
-    .option('--config <path>', 'JSON body with a full target dict')
-    .action(async (opts: { target?: string; config?: string }) => {
-      let body: JsonObject;
-      if (opts.config !== undefined) {
-        body = readJsonFile(opts.config);
-      } else {
-        const envTarget = opts.target ?? process.env['DISSEQT_REDTEAM_TARGET'];
-        if (envTarget === undefined || envTarget.length === 0) {
-          usage('pass --target provider/model, --config FILE, or set DISSEQT_REDTEAM_TARGET');
-          return;
-        }
-        if (envTarget.includes('/')) {
-          const [provider, ...rest] = envTarget.split('/');
-          body = { target: { provider, model: rest.join('/') } };
-        } else {
-          body = { target: { id: envTarget } };
-        }
-      }
-      await runAction(async () => emit(await rt().testConnection(body), true));
-    });
-
-  // -------------------------------------------------------------------
-  // eval-csv <path>
-  // -------------------------------------------------------------------
-
-  cmd
-    .command('eval-csv <path>')
-    .description('upload a CSV to the bulk-evaluate endpoint')
-    .option('--output <path>', 'save results JSON to file')
-    .option('--wait', 'poll until the job finishes', false)
-    .option('--poll-interval <seconds>', 'seconds between poll requests', '2')
-    .option('--max-wait <seconds>', 'max seconds to wait for completion', '600')
-    .action(
-      async (
-        csvPath: string,
-        opts: { output?: string; wait?: boolean; pollInterval: string; maxWait: string },
-      ) => {
-        const contents = readFileSync(csvPath, 'utf-8');
-        const filename = csvPath.split(/[\\/]/).pop() ?? 'upload.csv';
-        await runAction(async () => {
-          const client = rt();
-          const submit = await client.evaluateCsv(filename, contents);
-          const jobId = resolveId(submit, 'job_id', 'id');
-          if (opts.wait !== true) {
-            emit(submit, true);
-            return;
-          }
-          if (jobId === null) {
-            throw new Error(`could not resolve job id from response: ${JSON.stringify(submit)}`);
-          }
-          const pollMs = Math.round(Number(opts.pollInterval) * 1000);
-          const maxMs = Math.round(Number(opts.maxWait) * 1000);
-          const final = await pollUntilTerminal(() => client.evaluateCsvJob(jobId), pollMs, maxMs);
-          const state = String(final['status'] ?? final['state'] ?? '').toLowerCase();
-          if (!TERMINAL.has(state)) {
-            throw new Error(`job ${jobId} did not finish within ${opts.maxWait}s`);
-          }
-          if (opts.output !== undefined) {
-            writeFileSync(opts.output, JSON.stringify(final, null, 2));
-            process.stdout.write(`wrote ${opts.output}\n`);
-            return;
-          }
-          emit(final, true);
-        });
-      },
-    );
-
-  // -------------------------------------------------------------------
-  // eval-single-turn --input --technique --vulnerability --format
-  // -------------------------------------------------------------------
-
-  cmd
-    .command('eval-single-turn')
-    .description('evaluate one prompt against the single-turn jailbreak scorer')
-    .requiredOption('--input <text>', 'prompt to evaluate')
-    .option('--technique <name>', 'attack technique to attribute the prompt to')
-    .option('--vulnerability <name>', 'vulnerability to score against')
-    .option('--format <fmt>', 'text | json', 'text')
+    .option('--endpoint <url>', 'target endpoint URL')
+    .option('--provider <name>', 'provider name (e.g. openai)')
+    .option('--model <name>', 'model name (e.g. gpt-4o)')
+    .option('--api-key <key>', 'target API key (prefer --api-key-env)')
+    .option('--api-key-env <var>', 'env var holding the target API key')
+    .option('--session-id <id>', 'save the credentials to this testing session')
+    .option('--config <path>', 'JSON body with the full flat request instead of the flags')
     .action(
       async (opts: {
-        input: string;
-        technique?: string;
-        vulnerability?: string;
-        format: string;
+        endpoint?: string;
+        provider?: string;
+        model?: string;
+        apiKey?: string;
+        apiKeyEnv?: string;
+        sessionId?: string;
+        config?: string;
       }) => {
-        if (!['text', 'json'].includes(opts.format)) {
-          usage(`--format must be one of text|json (got "${opts.format}")`);
-        }
-        await runAction(async () => {
-          const payloadReq: Parameters<RedteamClient['singleTurnEvaluate']>[0] = {
-            input: opts.input,
-          };
-          if (opts.technique !== undefined) payloadReq.technique = opts.technique;
-          if (opts.vulnerability !== undefined) payloadReq.vulnerability = opts.vulnerability;
-          const payload = await rt().singleTurnEvaluate(payloadReq);
-          if (opts.format === 'json') {
-            emit(payload, true);
-            return;
+        let body: JsonObject;
+        if (opts.config !== undefined) {
+          body = readJsonFile(opts.config);
+        } else {
+          const apiKey =
+            opts.apiKey ?? (opts.apiKeyEnv !== undefined ? process.env[opts.apiKeyEnv] : undefined);
+          if (apiKey === undefined || apiKey.length === 0) {
+            usage('pass --api-key, --api-key-env VAR, or --config FILE');
           }
-          const verdict = String(payload['verdict'] ?? payload['decision'] ?? '?');
-          const reason = String(payload['reason'] ?? payload['rationale'] ?? '');
-          process.stdout.write(`verdict: ${verdict}\n`);
-          if (reason.length > 0) process.stdout.write(`reason: ${reason}\n`);
-        });
+          body = { api_key: apiKey ?? '' };
+          if (opts.endpoint !== undefined) body['endpoint'] = opts.endpoint;
+          if (opts.provider !== undefined) body['provider'] = opts.provider;
+          if (opts.model !== undefined) body['model'] = opts.model;
+          if (opts.sessionId !== undefined) body['session_id'] = opts.sessionId;
+        }
+        await runAction(async () => emit(await rt().testConnection(body), true));
       },
     );
 

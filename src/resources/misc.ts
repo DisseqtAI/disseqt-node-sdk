@@ -53,21 +53,23 @@ export class VulnerabilitiesClient extends ResourceBase {
   get(id: string): Promise<JsonObject> {
     return this._request('GET', `${this.root}/${id}`);
   }
-  /** POST /api/v1/vulnerabilities/{id}/test — fire-and-forget. */
-  test(id: string, payload?: JsonValue): Promise<JsonObject> {
-    return this._request(
-      'POST',
-      `${this.root}/${id}/test`,
-      payload !== undefined ? { json: payload } : {},
-    );
+  /**
+   * POST /api/v1/vulnerabilities/{id}/test — fire-and-forget. Body is a
+   * `VulnerabilityTestRequest` (`app_integration_id` | `llm_config` |
+   * `custom_llm_id`); `project_id` + `organization_id` travel as query params.
+   */
+  test(id: string, payload?: JsonValue, params?: QueryParams): Promise<JsonObject> {
+    return this._request('POST', `${this.root}/${id}/test`, {
+      ...(payload !== undefined ? { json: payload } : {}),
+      ...(params !== undefined ? { params } : {}),
+    });
   }
-  /** POST /api/v1/vulnerabilities/{id}/test/poll — blocks until scored. */
-  testPoll(id: string, payload?: JsonValue): Promise<JsonObject> {
-    return this._request(
-      'POST',
-      `${this.root}/${id}/test/poll`,
-      payload !== undefined ? { json: payload } : {},
-    );
+  /** POST /api/v1/vulnerabilities/{id}/test/poll — blocks until scored. Same body/params as `test`. */
+  testPoll(id: string, payload?: JsonValue, params?: QueryParams): Promise<JsonObject> {
+    return this._request('POST', `${this.root}/${id}/test/poll`, {
+      ...(payload !== undefined ? { json: payload } : {}),
+      ...(params !== undefined ? { params } : {}),
+    });
   }
 }
 

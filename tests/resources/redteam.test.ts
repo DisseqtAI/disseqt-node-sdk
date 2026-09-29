@@ -177,56 +177,11 @@ describe('RedteamClient — analytics + bot', () => {
     expect(lastCall(fetcher)[0]).toBe(`${BASE}/api/v1/testing/bot/recommend-validators`);
     await client.redteam.parseCurl('curl https://x');
     expect(lastCall(fetcher)[0]).toBe(`${BASE}/api/v1/testing/bot/parse-curl`);
-    expect(JSON.parse(String(lastCall(fetcher)[1]?.body))).toEqual({ curl: 'curl https://x' });
-    await client.redteam.testConnection({ target: { provider: 'openai', model: 'gpt-4o' } });
+    expect(JSON.parse(String(lastCall(fetcher)[1]?.body))).toEqual({
+      curl_command: 'curl https://x',
+    });
+    await client.redteam.testConnection({ provider: 'openai', model: 'gpt-4o', api_key: 'k' });
     expect(lastCall(fetcher)[0]).toBe(`${BASE}/api/v1/testing/bot/test-connection`);
-  });
-});
-
-describe('RedteamClient — eval', () => {
-  it('evaluateCsv POSTs multipart form-data', async () => {
-    const { client, fetcher } = makeClient();
-    await client.redteam.evaluateCsv('prompts.csv', 'a,b\n1,2\n');
-    const [url, init] = lastCall(fetcher);
-    expect(url).toBe(`${BASE}/api/v1/jailbreak/evaluate-csv`);
-    expect(init?.method).toBe('POST');
-    // FormData body: fetch sets content-type with boundary itself; our
-    // transport must NOT force application/json in that case.
-    const headers = init?.headers as Record<string, string>;
-    expect(headers['Content-Type']).toBeUndefined();
-    expect(init?.body).toBeInstanceOf(FormData);
-  });
-
-  // G3 regression: CSV-eval status is GET /jailbreak/evaluate-csv/:job_id
-  // (jailbreak_routes.go:55). /jobs/:id/process is a POST trigger
-  // (jailbreak_routes.go:45), not a GET status probe.
-  it('evaluateCsvJob GETs /jailbreak/evaluate-csv/{jobId}', async () => {
-    const { client, fetcher } = makeClient();
-    await client.redteam.evaluateCsvJob('j1');
-    expect(lastCall(fetcher)[0]).toBe(`${BASE}/api/v1/jailbreak/evaluate-csv/j1`);
-    expect(lastCall(fetcher)[1]?.method).toBe('GET');
-  });
-
-  it('singleTurnEvaluate POSTs input plus optional fields', async () => {
-    const { client, fetcher } = makeClient();
-    await client.redteam.singleTurnEvaluate({
-      input: 'hi',
-      technique: 'jb',
-      vulnerability: 'v1',
-    });
-    const [url, init] = lastCall(fetcher);
-    expect(url).toBe(`${BASE}/api/v1/jailbreak/single-turn-evaluate`);
-    expect(JSON.parse(String(init?.body))).toEqual({
-      input: 'hi',
-      technique: 'jb',
-      vulnerability: 'v1',
-    });
-  });
-
-  it('singleTurnEvaluate omits absent optional fields', async () => {
-    const { client, fetcher } = makeClient();
-    await client.redteam.singleTurnEvaluate({ input: 'hi' });
-    expect(JSON.parse(String(lastCall(fetcher)[1]?.body))).toEqual({ input: 'hi' });
   });
 });
 
@@ -246,18 +201,24 @@ describe('RedteamClient — reports', () => {
 });
 
 describe('VulnerabilitiesClient — test methods (Python parity)', () => {
-  it('test hits /vulnerabilities/{id}/test with optional body', async () => {
+  it('test hits /vulnerabilities/{id}/test with body + scope query', async () => {
     const { client, fetcher } = makeClient();
-    await client.vulnerabilities.test('v1', { target: 't1' });
+    await client.vulnerabilities.test(
+      'v1',
+      { app_integration_id: 'int-1' },
+      { project_id: 'proj_1', organization_id: 'org_1' },
+    );
     const [url, init] = lastCall(fetcher);
-    expect(url).toBe(`${BASE}/api/v1/vulnerabilities/v1/test`);
+    expect(url).toBe(
+      `${BASE}/api/v1/vulnerabilities/v1/test?project_id=proj_1&organization_id=org_1`,
+    );
     expect(init?.method).toBe('POST');
-    expect(JSON.parse(String(init?.body))).toEqual({ target: 't1' });
+    expect(JSON.parse(String(init?.body))).toEqual({ app_integration_id: 'int-1' });
   });
 
   it('testPoll hits /vulnerabilities/{id}/test/poll', async () => {
     const { client, fetcher } = makeClient();
-    await client.vulnerabilities.testPoll('v1', { target: 't1' });
+    await client.vulnerabilities.testPoll('v1', { app_integration_id: 'int-1' });
     expect(lastCall(fetcher)[0]).toBe(`${BASE}/api/v1/vulnerabilities/v1/test/poll`);
   });
 });

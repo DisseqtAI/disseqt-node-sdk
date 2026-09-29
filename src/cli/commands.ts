@@ -1,6 +1,6 @@
 import type { Command } from 'commander';
 
-import { buildClient, emit, pollUntilTerminal, runAction } from './config.js';
+import { buildClient, emit, EXIT_USAGE, pollUntilTerminal, runAction } from './config.js';
 import { readBody } from './parse.js';
 
 // ponytail: single file for every command group. Splitting per-group buys us
@@ -475,19 +475,40 @@ export function registerBonus(program: Command): void {
     v
       .command('test <id>')
       .description('POST /api/v1/vulnerabilities/{id}/test — fire and forget')
-      .option('--target <spec>', 'target identifier (packaged into {"target": ...} body)')
-      .option('--body <json|file|->', 'raw JSON body (overrides --target)')
-      .action(async (id: string, opts: CommonOpts & { target?: string; body?: string }) => {
-        const body =
-          opts.body !== undefined
-            ? (readBody(opts.body) as never)
-            : opts.target !== undefined
-              ? ({ target: opts.target } as never)
-              : undefined;
-        await runAction(async () =>
-          emit(await buildClient().vulnerabilities.test(id, body), opts.json === true),
-        );
-      }),
+      .option('--target <id>', 'app integration id (sent as app_integration_id)')
+      .option('--body <json|file|->', 'raw VulnerabilityTestRequest body (overrides --target)')
+      .option(
+        '--organization-id <id>',
+        'organization scope (query param; default env DISSEQT_ORGANIZATION_ID)',
+      )
+      .action(
+        async (
+          id: string,
+          opts: CommonOpts & { target?: string; body?: string; organizationId?: string },
+        ) => {
+          const orgId = opts.organizationId ?? process.env['DISSEQT_ORGANIZATION_ID'] ?? '';
+          if (orgId.length === 0) {
+            process.stderr.write('error: pass --organization-id or set DISSEQT_ORGANIZATION_ID\n');
+            process.exit(EXIT_USAGE);
+          }
+          const body =
+            opts.body !== undefined
+              ? (readBody(opts.body) as never)
+              : opts.target !== undefined
+                ? ({ app_integration_id: opts.target } as never)
+                : undefined;
+          await runAction(async () => {
+            const c = buildClient();
+            emit(
+              await c.vulnerabilities.test(id, body, {
+                project_id: c.transport.projectId,
+                organization_id: orgId,
+              }),
+              opts.json === true,
+            );
+          });
+        },
+      ),
   );
 
   // NOTE: the `mr` group (previously list/get/create) was removed alongside
