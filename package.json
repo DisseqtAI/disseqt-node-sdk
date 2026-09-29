@@ -1,6 +1,6 @@
 {
   "name": "@disseqt-ai/sdk",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Node.js SDK for Disseqt AI validation, prompt packs, and agentic tracing.",
   "license": "Proprietary",
   "author": "Disseqt AI Limited <support@disseqt.ai>",
@@ -55,7 +55,7 @@
     "smoke:all": "npm run build && node scripts/smoke-all.mjs",
     "smoke:all:live": "npm run build && DISSEQT_LIVE=1 node scripts/smoke-all.mjs --live",
     "validators:all": "tsx scripts/run-all-validators.ts",
-    "prepack": "npm run clean && npm run lint && npm run typecheck && npm run test && npm run build",
+    "prepack": "npm run clean && npm run lint && npm run typecheck && npm run build && npm run test",
     "pack:dry-run": "npm pack --dry-run"
   },
   "keywords": [

@@ -20,6 +20,7 @@ The official **Node.js / TypeScript SDK** for the [Disseqt AI](https://disseqt.a
   - [Composite Scoring](#composite-scoring)
   - [Agentic Tracing](#agentic-tracing)
   - [Prompt Packs](#prompt-packs)
+- [CLI](#cli)
 - [Configuration](#configuration)
 - [Available Validators](#available-validators)
 - [Request Models](#request-models)
@@ -240,6 +241,58 @@ Snake_case method aliases (`generate_prompt_pack`, `create_run`, `download_pack_
 
 ---
 
+## CLI
+
+The package ships a `disseqt` binary (`npx disseqt --help`). Every verb
+authenticates with **only** `X-API-Key` + `X-Project-Id`; the gateway
+injects the service key and identity, so no service-key header is ever set
+client-side.
+
+```bash
+disseqt login --api-key $KEY --project-id $PROJECT   # smoke-tests GET /api/v1/testing/attack-techniques
+disseqt logout                                       # clears ~/.disseqt/config.json only
+```
+
+Credentials resolve from flags → `~/.disseqt/config.json` → `DISSEQT_API_KEY`
+/ `DISSEQT_PROJECT_ID`. `DISSEQT_BASE_URL` (default
+`https://api.disseqt.ai/dataset`) fronts every resource and `redteam` verb;
+`disseqt scan` uses `DISSEQT_VALIDATORS_BASE_URL` (default
+`https://api.disseqt.ai/realtime-validations`).
+
+### `disseqt redteam`
+
+| Verb                                                                                                    | Backend call                                                                                                      | Body                                                                                                                                                                             |
+| ------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `list-attacks [--kind single\|multi\|agents\|all]`                                                      | `GET /testing/attack-techniques`, `/mr-jailbreak/techniques`, `/mr-jailbreak/agents`                              | —                                                                                                                                                                                |
+| `attack --single-turn --technique <key> --target <application_id> [--pack <id>]* [--validator <name>]*` | `POST /testing/sessions` → `POST /testing/sessions/{id}/runs` → poll `GET /testing/runs/{id}` → `GET .../results` | `{name, application_context, target_config:{application_id}, testing_plan:{prompt_sources, attack_strategies, validators, execution}}` then `{trigger_metadata, application_id}` |
+| `attack --multi-turn --technique <uuid> --target <template.json> --prompt <p>{1,10}`                    | `POST /mr-jailbreak/batch-automate` → poll `GET /mr-jailbreak/jobs/{id}` per job                                  | `{target_prompts, app_integration_template, jailbreak_config, ecid_prefix:"cli", ecid_start_number:1}`                                                                           |
+| `run <config.yaml> [--json]`                                                                            | session + run as above                                                                                            | YAML keys `name`, `application_context`, `target_config`, `testing_plan` (or `techniques`/`packs`/`validators`), `run_name`                                                      |
+| `vuln-test --vulnerability <id> --target <app_integration_id> [--organization-id <id>]`                 | `POST /vulnerabilities/{id}/test/poll?project_id&organization_id`                                                 | `{app_integration_id}` or `--llm-config`                                                                                                                                         |
+| `validate --input --validator <name>...`                                                                | `POST /testing/validate`                                                                                          | `{input, output, validators, input_context, threshold?}`                                                                                                                         |
+| `status <id>` / `results <id>` / `cancel <id>`                                                          | `/testing/runs/{id}`, `.../results`, `.../cancel`; 404 → `/mr-jailbreak/jobs/{id}`, `.../interactions`            | —                                                                                                                                                                                |
+| `report <runId> --format json\|markdown` / `report --format csv --session <id>`                         | `GET /testing/runs/{id}/results` / `GET /testing/sessions/{id}/report/csv`                                        | —                                                                                                                                                                                |
+| `analytics [--summary\|--prompts-stats]`                                                                | `GET /jailbreak/analytics/summary`, `GET /jailbreak/prompts-stats`                                                | —                                                                                                                                                                                |
+| `recommend packs --app-name --app-description` / `recommend attacks\|validators --app-description`      | `POST /testing/bot/recommend-{kind}`                                                                              | `{app_name, app_description}` / `{app_description}`                                                                                                                              |
+| `parse-curl <file>\|--stdin`                                                                            | `POST /testing/bot/parse-curl`                                                                                    | `{curl_command}`                                                                                                                                                                 |
+| `test-connection --endpoint --provider --model --api-key-env VAR [--session-id]`                        | `POST /testing/bot/test-connection`                                                                               | `{endpoint, provider, model, api_key, session_id?}`                                                                                                                              |
+
+All paths are under `/api/v1`. Responses are the backend's
+`{"status":"success","data":...}` envelope, unwrapped to `data`; a 2xx
+`{"status":"error"}` body raises `DisseqtApiError`. Exit codes: 0 ok,
+1 failed (HTTP/API error, poll deadline), 2 usage.
+
+### `disseqt scan`
+
+```bash
+disseqt scan . --format sarif -o report.sarif --diff main..HEAD
+```
+
+Exits 1 when findings remain (unless `--no-fail-on-findings`), when no
+validator request succeeded, or when any batch failed; stops after the
+first 401/403.
+
+---
+
 ## Configuration
 
 All three clients accept a config object passed directly into the constructor — no environment-variable lookups happen inside the SDK.
@@ -449,6 +502,7 @@ Defaults used when you don't override them:
 | Validation route                | `POST /api/v1/sdk/validators/{domain}/{validator}`            |
 | Composite route                 | `POST /api/v1/validators/composite/evaluate`                  |
 | Prompt-packs base URL           | `https://api.disseqt.ai`                                      |
+| Resources / CLI base URL        | `https://api.disseqt.ai/dataset` (`DISSEQT_BASE_URL`)         |
 | Prompt-packs path prefix        | `/sdk/prompt-packs/api/v1/sdk/prompt-packs`                   |
 | Agentic tracing endpoint        | `https://api.disseqt.ai/agentic-monitoring/api/v1/traces`     |
 | Auth headers                    | `X-API-Key`, `X-Project-Id`, `Content-Type: application/json` |

@@ -5,8 +5,9 @@
 ### Removed
 
 - **Server-side realtime-policy evaluation surface.** The
-  `Client.validate(request, { policies: [...] })` shape (and its
-  `Client.validateSync(..., { raiseOnAsync: true })` companion), the
+  `Client.validate(request, { policies: [...] })` shape (and the
+  `{ raiseOnAsync: true }` option on `Client.validateSync`, which is kept
+  as a plain alias of `validate()`), the
   `Guardrails` class + `BaseGuard` extension, `BlockedError`, the
   policy helpers module (`anyBlocking`, `isBlocking`, `isAsync`,
   `parsePolicy`, `PolicyDecision`, `PolicyRule`, `PolicyRuleset`,
@@ -17,8 +18,47 @@
   without a working transport would silently 404 on the first live
   call. Class-based validators (`Client.validate(new InputValidator(...))`
   and the composite/themes paths) are unaffected.
+- **`disseqt redteam eval-csv` and `disseqt redteam eval-single-turn`**, with
+  `RedteamClient.evaluateCsv` / `evaluateCsvJob` / `singleTurnEvaluate`.
+  Their `/api/v1/jailbreak/evaluate-csv*` and `/single-turn-evaluate` routes
+  are not part of the deepteam-parity surface; the remaining `redteam`
+  verbs cover the same flows through testing sessions and mr-jailbreak.
+- `disseqt logout --local-only`. Logout is now local-only by definition
+  (see Changed); revoke keys from the dashboard.
 
 ### Fixed
+
+- **Backend envelope is unwrapped once, in the transport.** Every
+  `requestJson` / `requestJsonAny` call now returns the `data` member of
+  the dataset-backend's `{"status":"success","data":...}` envelope and
+  throws `DisseqtApiError` (new, with `code` / `requestId`) when a 2xx body
+  carries `{"status":"error"}`. Pollers stop mistaking the envelope's
+  `"success"` for a terminal run state, and `disseqt run --wait` /
+  `plan-run --wait` / `redteam attack` exit non-zero when the deadline
+  passes instead of printing a still-running payload as if it were final.
+- **`redteam` request bodies match the Go structs** (`api/testing_types.go`,
+  `pkg/testing/pipeline.go`, `api/mr_jailbreak_batch_automation.go`,
+  `api/testing_bot_handlers.go`, `api/vulnerability_types.go`):
+  - `attack --single-turn` / `run <yaml>` send
+    `{name, application_context, target_config:{application_id}, testing_plan}`
+    then `{run_name?, trigger_metadata, application_id?}`.
+  - `attack --multi-turn` sends a `BatchAutomateJailbreakRequest`
+    (`target_prompts` from repeatable `--prompt`, 1..10;
+    `app_integration_template` from `--target <file>`; `jailbreak_config`;
+    `ecid_prefix: "cli"`, `ecid_start_number: 1`) and polls
+    `/mr-jailbreak/jobs/{id}` for every returned job.
+  - `parse-curl` sends `{curl_command}`; `test-connection` sends the flat
+    `{endpoint, provider, model, api_key, session_id?}`; `recommend packs`
+    sends `{app_name, app_description}` and `recommend attacks|validators`
+    send `{app_description}`.
+  - `vuln-test` and `vulnerability test` send `{app_integration_id}` (or
+    `--llm-config`) with `?project_id&organization_id`.
+  - `status` / `results` fall back to mr-jailbreak only on a 404.
+- `disseqt scan` exits 1 when no validator request succeeded or any batch
+  failed (config errors stay exit 2), prints the first failure, and stops
+  after the first 401/403 instead of replaying it for every batch.
+- `~/.disseqt/config.json` is `chmod 0600` after every write, not only on
+  create; the masked key prefix shown by `login` is capped at 8 chars.
 
 - **`CreateRunRequest`'s `runName` now actually reaches the server.** Since
   this SDK's first release, `toPayload()` sent the run name under the key
@@ -41,8 +81,35 @@
   from the payload rather than sent as dead weight. No observable
   behavior change from the caller's side of a successful call.
 
+### Changed
+
+- **Auth contract.** The SDK and CLI send only `X-API-Key` + `X-Project-Id`;
+  the gateway injects the service key and identity. No service-key header
+  is ever set client-side.
+- `disseqt login` smoke-tests credentials with
+  `GET {DISSEQT_BASE_URL}/api/v1/testing/attack-techniques` (401/403 =
+  bad key or project) and honours `DISSEQT_BASE_URL` when `--base-url` is
+  absent. `disseqt logout` only clears the local config file.
+- `DisseqtResourceClient` (and every `disseqt` resource / `redteam` verb)
+  defaults to `https://api.disseqt.ai/dataset`. `disseqt scan` reads
+  `DISSEQT_VALIDATORS_BASE_URL` (default
+  `https://api.disseqt.ai/realtime-validations`).
+- `redteam report --format csv` takes `--session <id>`; json/markdown still
+  take the run id positionally.
+- `redteam test-connection` takes `--endpoint/--provider/--model/--api-key/
+--api-key-env`; `recommend` takes `--app-name/--app-description`
+  (`--context` and `DISSEQT_REDTEAM_TARGET` are gone).
+- `prepack` runs `clean && lint && typecheck && build && test`.
+
 ### Added
 
+- `disseqt` CLI: `login` / `logout`, `redteam` (list-attacks,
+  list-techniques, list-personas, attack, session, vuln-test, run,
+  validate, status, cancel, results, report, analytics, recommend,
+  parse-curl, test-connection), `scan` (SARIF / JSON / Markdown code
+  scanner with `--diff`), and resource verbs (`run`, `plan-run`,
+  `vulnerability`, targets, packs, ...). See the README's CLI section.
+- `DisseqtApiError` for 2xx `{status:"error"}` envelopes.
 - `CreateRunRequest` (prompt packs) gained an optional `applicationId` /
   `application_id` field. When set and none of `llm_id`/
   `app_integration_id`/`custom_llm_id` is otherwise supplied, the backend
