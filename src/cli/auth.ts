@@ -6,17 +6,14 @@ import * as tokenStore from '../auth/tokenStore.js';
 import type { StoredAuth } from '../auth/types.js';
 import { DisseqtHttpError } from '../http/errors.js';
 import { DisseqtHttpTransport } from '../http/transport.js';
-import type { JsonObject } from '../http/types.js';
 import { stripTrailingSlashes } from '../http/url.js';
+import { RESOURCES_DEFAULT_BASE_URL } from '../resources/base.js';
 import { EXIT_FAILED, EXIT_OK, EXIT_USAGE } from './config.js';
 
-// Same defaults the resource client uses. Duplicated only because the
-// resource client imports commander-free code and we want to keep that
-// direction (auth doesn't depend on resources).
-const DEFAULT_BASE_URL = 'https://api.disseqt.ai';
-const API_KEYS_PATH = '/api/v1/users/me/api-keys';
+/** Cheap authenticated GET that every project can hit — proves the key + project pair. */
+const SMOKE_PATH = '/api/v1/testing/attack-techniques';
 const PROMPT_URL = 'https://app.disseqt.ai/settings/api-keys';
-const KEY_PREFIX_LEN = 12;
+const KEY_PREFIX_LEN = 8;
 
 interface LoginOpts {
   apiKey?: string;
@@ -27,7 +24,6 @@ interface LoginOpts {
 
 interface LogoutOpts {
   json?: boolean;
-  localOnly?: boolean;
 }
 
 /** Register `disseqt login` + `disseqt logout` on the root program. */
@@ -37,7 +33,10 @@ export function registerAuth(program: Command): void {
     .description('paste an API key + project id, verify, store to ~/.disseqt/config.json')
     .option('--api-key <key>', 'skip prompt, use this API key')
     .option('--project-id <id>', 'skip prompt, use this project id')
-    .option('--base-url <url>', 'override backend base URL (defaults to production)')
+    .option(
+      '--base-url <url>',
+      'override backend base URL (default: DISSEQT_BASE_URL or production)',
+    )
     .option('--json', 'emit JSON on success', false)
     .action(async (opts: LoginOpts) => {
       await runLogin(opts);
@@ -45,8 +44,7 @@ export function registerAuth(program: Command): void {
 
   program
     .command('logout')
-    .description('revoke stored API key on the backend and clear the local config file')
-    .option('--local-only', 'skip server revocation, just clear the local config', false)
+    .description('clear the local ~/.disseqt/config.json (keys are revoked from the dashboard)')
     .option('--json', 'emit JSON on completion', false)
     .action(async (opts: LogoutOpts) => {
       await runLogout(opts);
@@ -56,7 +54,9 @@ export function registerAuth(program: Command): void {
 async function runLogin(opts: LoginOpts): Promise<void> {
   try {
     const auth = await collectCredentials(opts);
-    const baseUrl = stripTrailingSlashes(opts.baseUrl ?? DEFAULT_BASE_URL);
+    const baseUrl = stripTrailingSlashes(
+      opts.baseUrl ?? process.env['DISSEQT_BASE_URL'] ?? RESOURCES_DEFAULT_BASE_URL,
+    );
     await verify(auth, baseUrl);
     const stored: StoredAuth = { apiKey: auth.apiKey, projectId: auth.projectId };
     if (opts.baseUrl !== undefined && opts.baseUrl.trim().length > 0) {
@@ -76,9 +76,6 @@ async function runLogout(opts: LogoutOpts): Promise<void> {
     if (stored === null) {
       process.stdout.write('already logged out (no config file)\n');
       process.exit(EXIT_OK);
-    }
-    if (opts.localOnly !== true) {
-      await revokeRemote(stored);
     }
     await tokenStore.clear();
     if (opts.json === true) {
@@ -177,8 +174,9 @@ function promptLine(rl: ReadlineInterface, prompt: string): Promise<string> {
 }
 
 /**
- * Hit `GET /api/v1/users/me/api-keys` with the just-entered credentials.
- * 200 → keys are good. 401 → wrong key or project. Any other status →
+ * Hit `GET {baseUrl}/api/v1/testing/attack-techniques` with only
+ * `X-API-Key` + `X-Project-Id` (the gateway injects everything else).
+ * 200 → pair is good. 401/403 → wrong key or project. Anything else →
  * surface the HTTP error unchanged.
  */
 async function verify(auth: { apiKey: string; projectId: string }, baseUrl: string): Promise<void> {
@@ -187,75 +185,16 @@ async function verify(auth: { apiKey: string; projectId: string }, baseUrl: stri
     projectId: auth.projectId,
   });
   try {
-    await transport.requestRaw({ method: 'GET', url: `${baseUrl}${API_KEYS_PATH}` });
+    await transport.requestRaw({ method: 'GET', url: `${baseUrl}${SMOKE_PATH}` });
   } catch (error) {
-    if (error instanceof DisseqtHttpError && error.statusCode === 401) {
+    if (
+      error instanceof DisseqtHttpError &&
+      (error.statusCode === 401 || error.statusCode === 403)
+    ) {
       throw new AuthCheckFailed('invalid API key or project ID');
     }
     throw error;
   }
-}
-
-/**
- * Fetch the user's keys, find the one matching our stored prefix, DELETE
- * it. Best-effort — any failure clears the local file anyway and prints a
- * warning. A stale local file after a server change is a worse UX than
- * "revoke may have failed, key gone locally".
- */
-async function revokeRemote(stored: StoredAuth): Promise<void> {
-  const baseUrl = stripTrailingSlashes(stored.baseUrl ?? DEFAULT_BASE_URL);
-  const transport = new DisseqtHttpTransport({
-    apiKey: stored.apiKey,
-    projectId: stored.projectId,
-  });
-  try {
-    const listed = await transport.requestJson<{ data?: JsonObject[]; items?: JsonObject[] }>({
-      method: 'GET',
-      url: `${baseUrl}${API_KEYS_PATH}`,
-    });
-    const wanted = stored.apiKey.slice(0, KEY_PREFIX_LEN);
-    const entries = extractEntries(listed);
-    const match = entries.find((e) => matchesPrefix(e, wanted));
-    if (match === undefined) {
-      process.stderr.write(
-        'warning: no matching API key found on the server (already revoked?); clearing local config\n',
-      );
-      return;
-    }
-    const id = String(match['id'] ?? match['key_id'] ?? '');
-    if (id.length === 0) {
-      process.stderr.write('warning: server returned key without id; clearing local config\n');
-      return;
-    }
-    await transport.requestRaw({
-      method: 'DELETE',
-      url: `${baseUrl}${API_KEYS_PATH}/${encodeURIComponent(id)}`,
-      includeContentType: false,
-    });
-  } catch (error) {
-    const msg = error instanceof Error ? error.message : String(error);
-    process.stderr.write(`warning: failed to revoke API key on server: ${msg}\n`);
-    process.stderr.write('clearing local config anyway\n');
-  }
-}
-
-function extractEntries(
-  body: { data?: JsonObject[]; items?: JsonObject[] } | JsonObject,
-): JsonObject[] {
-  if (Array.isArray((body as { data?: unknown }).data)) {
-    return (body as { data: JsonObject[] }).data;
-  }
-  if (Array.isArray((body as { items?: unknown }).items)) {
-    return (body as { items: JsonObject[] }).items;
-  }
-  if (Array.isArray(body)) return body as unknown as JsonObject[];
-  return [];
-}
-
-function matchesPrefix(entry: JsonObject, wanted: string): boolean {
-  const prefix = entry['key_prefix'] ?? entry['prefix'];
-  if (typeof prefix !== 'string') return false;
-  return prefix === wanted || prefix.startsWith(wanted) || wanted.startsWith(prefix);
 }
 
 function emitSuccess(apiKey: string, projectId: string, json: boolean): void {

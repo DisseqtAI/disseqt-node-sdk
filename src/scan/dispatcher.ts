@@ -28,7 +28,7 @@ export const FALLBACK_VALIDATORS: readonly string[] = [
 
 export const VALIDATOR_DOMAIN = 'input-validation';
 const VALIDATOR_PATH_TEMPLATE = '/api/v1/sdk/validators/{domain}/{validator}';
-export const BASE_ENV = 'DISSEQT_BASE_URL';
+export const BASE_ENV = 'DISSEQT_VALIDATORS_BASE_URL';
 export const DEFAULT_BASE = 'https://api.disseqt.ai/realtime-validations';
 
 /** CLI flag beats env var beats default. */
@@ -88,6 +88,8 @@ export interface DispatchStats {
   batches_ok: number;
   batches_failed: number;
   findings_by_validator: Record<string, number>;
+  /** Message of the first failed request, for the CLI's exit summary. */
+  first_error: string | null;
 }
 
 export function newDispatchStats(): DispatchStats {
@@ -96,8 +98,12 @@ export function newDispatchStats(): DispatchStats {
     batches_ok: 0,
     batches_failed: 0,
     findings_by_validator: {},
+    first_error: null,
   };
 }
+
+const isAuthFailure = (error: unknown): boolean =>
+  error instanceof DisseqtHttpError && (error.statusCode === 401 || error.statusCode === 403);
 
 /** Transport hook — split out so tests can inject a fake. */
 export type ScanTransport = (
@@ -245,8 +251,9 @@ export interface DispatchOptions {
 
 /**
  * POST batches to each validator and yield the parsed findings.
- * Batch-level failures are logged (via `onError`) and skipped so one flaky
- * validator doesn't kill the whole scan.
+ * Batch-level failures are logged to stderr and skipped so one flaky
+ * validator doesn't kill the whole scan — except 401/403, which would fail
+ * every remaining request identically, so dispatch stops at the first one.
  */
 export async function* dispatch(
   chunks: AsyncIterable<CodeChunk> | Iterable<CodeChunk>,
@@ -277,16 +284,14 @@ export async function* dispatch(
         );
       } catch (error) {
         stats.batches_failed += 1;
-        if (error instanceof DisseqtHttpError) {
-          process.stderr.write(
-            `[warn] validator ${validator} failed for batch of ${batch.chunks.length} chunks: ${error.message}\n`,
-          );
-        } else {
-          const msg = error instanceof Error ? error.message : String(error);
-          process.stderr.write(`[warn] validator ${validator} errored: ${msg}\n`);
-        }
+        const msg = error instanceof Error ? error.message : String(error);
+        stats.first_error ??= `validator ${validator}: ${msg}`;
+        process.stderr.write(
+          `[warn] validator ${validator} failed for batch of ${batch.chunks.length} chunks: ${msg}\n`,
+        );
         done += 1;
         options.onProgress?.(done, stats.total_batches);
+        if (isAuthFailure(error)) return;
         continue;
       }
       stats.batches_ok += 1;

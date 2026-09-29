@@ -11,7 +11,8 @@ import type {
   QueryParams,
 } from '../http/types.js';
 
-export const RESOURCES_DEFAULT_BASE_URL = 'https://api.disseqt.ai';
+/** dataset-backend gateway prefix; every /api/v1/... resource route hangs off it. */
+export const RESOURCES_DEFAULT_BASE_URL = 'https://api.disseqt.ai/dataset';
 
 export interface ResourceClientConfig extends DisseqtHttpTransportConfig {
   baseUrl?: string;

@@ -7,6 +7,8 @@ import { DisseqtHttpTransport } from '../http/index.js';
 import type { Command } from 'commander';
 import {
   APPSEC_VALIDATORS,
+  BASE_ENV,
+  DEFAULT_BASE,
   DEFAULT_BATCH_CHARS,
   DEFAULT_MAX_CHUNK_CHARS,
   DEFAULT_MAX_FILE_BYTES,
@@ -79,7 +81,7 @@ function shouldShowProgress(fmt: string, hasOutputPath: boolean): boolean {
 function buildTransport(): { transport: ScanTransport; baseUrl: string } {
   const apiKey = process.env['DISSEQT_API_KEY'];
   const projectId = process.env['DISSEQT_PROJECT_ID'];
-  const baseUrl = process.env['DISSEQT_BASE_URL'] ?? 'https://api.disseqt.ai';
+  const baseUrl = process.env[BASE_ENV] ?? DEFAULT_BASE;
 
   if (apiKey === undefined || apiKey.trim().length === 0) {
     process.stderr.write('error: DISSEQT_API_KEY is not set\n');
@@ -200,6 +202,11 @@ async function runScan(scanPath: string, opts: ScanOpts): Promise<never> {
       `${findings.length} finding(s) after min-severity=${effectiveMin}\n`,
   );
 
+  // A scan that could not reach the validators is not a clean scan.
+  if (stats.batches_failed > 0 || stats.batches_ok === 0) {
+    process.stderr.write(`error: ${stats.first_error ?? 'no validator request succeeded'}\n`);
+    process.exit(EXIT_FAILED);
+  }
   if (opts.failOnFindings && findings.length > 0) process.exit(EXIT_FAILED);
   process.exit(EXIT_OK);
 }

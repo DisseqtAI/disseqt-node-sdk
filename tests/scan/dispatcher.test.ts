@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { DisseqtHttpError } from '../../src/http/errors.js';
+
 import {
   batchChunks,
   dispatch,
@@ -102,6 +104,19 @@ describe('dispatcher', () => {
     expect(findings).toHaveLength(0);
     expect(stats.batches_failed).toBe(1);
     expect(stats.batches_ok).toBe(1);
+    expect(stats.first_error).toBe('validator bfla: backend down');
+  });
+
+  it('dispatch stops after the first 401/403', async () => {
+    const transport: ScanTransport = vi.fn(async () => {
+      throw new DisseqtHttpError(403, 'forbidden');
+    });
+    const stats = newDispatchStats();
+    await collect(dispatch([chunk('a.ts', 'code\n')], ['bfla', 'bola'], transport, { stats }));
+    expect(transport).toHaveBeenCalledTimes(1);
+    expect(stats.batches_failed).toBe(1);
+    expect(stats.batches_ok).toBe(0);
+    expect(stats.first_error).toContain('HTTP 403');
   });
 
   it('extractFindingsList handles data.findings, data.issues, top-level, and rejects garbage', () => {

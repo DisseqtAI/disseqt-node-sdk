@@ -1,5 +1,6 @@
 import {
   accessSync,
+  chmodSync,
   constants,
   mkdirSync,
   readFileSync,
@@ -97,6 +98,8 @@ export async function save(auth: StoredAuth): Promise<void> {
   writeFileSync(configPath(), `${JSON.stringify(payload, null, 2)}\n`, {
     mode: 0o600,
   });
+  // `mode` only applies on create; an existing wider file keeps its bits.
+  if (platform() !== 'win32') chmodSync(configPath(), 0o600);
 }
 
 function isNodeError(v: unknown): v is Error & { code: string } {

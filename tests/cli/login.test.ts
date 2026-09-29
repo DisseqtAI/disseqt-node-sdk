@@ -118,7 +118,7 @@ describe('disseqt login', () => {
     expect(result.code).toBe(0);
     expect(requests.length).toBe(1);
     expect(requests[0]?.method).toBe('GET');
-    expect(requests[0]?.url).toBe('/api/v1/users/me/api-keys');
+    expect(requests[0]?.url).toBe('/api/v1/testing/attack-techniques');
     expect(requests[0]?.headers['x-api-key']).toBe('fake_apikey_12345');
     expect(requests[0]?.headers['x-project-id']).toBe('proj_1');
     const cfg = readConfig();
@@ -126,9 +126,19 @@ describe('disseqt login', () => {
     expect(cfg?.auth.project_id).toBe('proj_1');
     const parsed = JSON.parse(result.stdout) as { logged_in: boolean; api_key_prefix: string };
     expect(parsed.logged_in).toBe(true);
-    // The masked prefix must not include chars beyond position 12
-    expect(parsed.api_key_prefix.startsWith('fake_apikey_')).toBe(true);
-    expect(parsed.api_key_prefix).not.toContain('12345');
+    // The masked prefix must not include chars beyond position 8
+    expect(parsed.api_key_prefix.startsWith('fake_api')).toBe(true);
+    expect(parsed.api_key_prefix).not.toContain('key_12345');
+  });
+
+  it('honours DISSEQT_BASE_URL when --base-url is absent', async () => {
+    const result = await runCli(
+      ['login', '--api-key', 'fake_apikey_12345', '--project-id', 'proj_1'],
+      { DISSEQT_BASE_URL: baseUrl },
+    );
+    expect(result.code).toBe(0);
+    expect(requests[0]?.url).toBe('/api/v1/testing/attack-techniques');
+    expect(readConfig()?.auth.base_url).toBeUndefined();
   });
 
   it('exits non-zero on 401 and does NOT write the config', async () => {
@@ -161,7 +171,7 @@ describe('disseqt login', () => {
       '--json',
     ]);
     expect(result.code).toBe(0);
-    // Full token must not appear anywhere. Only the 12-char prefix.
+    // Full token must not appear anywhere. Only the 8-char prefix.
     expect(result.stdout).not.toContain(secret);
     expect(result.stderr).not.toContain(secret);
   });
@@ -174,8 +184,7 @@ describe('disseqt login', () => {
 });
 
 describe('disseqt logout', () => {
-  it('--local-only clears the config without hitting the network', async () => {
-    // Seed a config
+  it('clears the config locally without hitting the network', async () => {
     await runCli([
       'login',
       '--api-key',
@@ -188,41 +197,18 @@ describe('disseqt logout', () => {
     expect(readConfig()).not.toBeNull();
     requests.length = 0;
 
-    const result = await runCli(['logout', '--local-only']);
+    const result = await runCli(['logout']);
     expect(result.code).toBe(0);
+    expect(result.stdout).toContain('logged out');
     expect(readConfig()).toBeNull();
     expect(requests.length).toBe(0);
   });
 
-  it('revokes on the server by matching key_prefix, then clears', async () => {
-    // Seed
-    await runCli([
-      'login',
-      '--api-key',
-      'fake_apikey_1234DEF',
-      '--project-id',
-      'proj_1',
-      '--base-url',
-      baseUrl,
-    ]);
-    requests.length = 0;
-
-    // Mock server: first GET lists the keys, then DELETE by id.
-    respond = (req) => {
-      if (req.method === 'GET' && req.url === '/api/v1/users/me/api-keys') {
-        return {
-          status: 200,
-          body: { data: [{ id: 'key-1', key_prefix: 'fake_apikey_12' }] },
-        };
-      }
-      return { status: 204, body: {} };
-    };
-    const result = await runCli(['logout']);
+  it('has no --local-only flag any more', async () => {
+    const result = await runCli(['logout', '--help']);
     expect(result.code).toBe(0);
-    const methods = requests.map((r) => `${r.method} ${r.url}`);
-    expect(methods).toContain('GET /api/v1/users/me/api-keys');
-    expect(methods.some((m) => m.startsWith('DELETE /api/v1/users/me/api-keys/key-1'))).toBe(true);
-    expect(readConfig()).toBeNull();
+    expect(result.stdout).not.toContain('--local-only');
+    expect(result.stdout).toContain('local');
   });
 
   it('is a no-op message when already logged out', async () => {

@@ -17,6 +17,11 @@ beforeAll(async () => {
     req.on('data', (chunk: Buffer) => (body += chunk.toString('utf-8')));
     req.on('end', () => {
       requests.push({ method: req.method, url: req.url, body });
+      if (req.headers['x-api-key'] === 'bad') {
+        res.writeHead(401, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ status: 'error', error: { external: 'invalid api key' } }));
+        return;
+      }
       res.writeHead(200, { 'Content-Type': 'application/json' });
       // Return a single finding so exit code + rendered output can be asserted.
       res.end(
@@ -67,7 +72,7 @@ const runCli = (
         ...process.env,
         DISSEQT_API_KEY: 'k',
         DISSEQT_PROJECT_ID: 'p',
-        DISSEQT_BASE_URL: baseUrl,
+        DISSEQT_VALIDATORS_BASE_URL: baseUrl,
         DISSEQT_SHOW_PROGRESS: '0',
         ...env,
       },
@@ -120,6 +125,20 @@ describe('disseqt scan CLI', () => {
       tmp,
     );
     expect(result.code).toBe(0);
+  });
+
+  it('exits 1 and stops after the first 401', async () => {
+    const tmp = await mkdtemp(path.join(tmpdir(), 'scan-cli-'));
+    await writeFile(path.join(tmp, 'a.py'), 'code = 1\n');
+    const before = requests.length;
+    const result = await runCli(
+      ['scan', tmp, '--validator', 'bfla', '--validator', 'bola', '--no-fail-on-findings'],
+      tmp,
+      { DISSEQT_API_KEY: 'bad' },
+    );
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain('error: validator bfla');
+    expect(requests.length - before).toBe(1);
   });
 
   it('exits 0 when no source files match', async () => {
