@@ -7,7 +7,6 @@ import {
   registerPack,
   registerPlan,
   registerPlanRun,
-  registerRagValidation,
   registerRun,
   registerSession,
   registerTarget,
@@ -28,7 +27,6 @@ registerTarget(program);
 registerPack(program);
 registerRun(program);
 registerValidation(program);
-registerRagValidation(program);
 registerSession(program);
 registerValidator(program);
 registerBonus(program);

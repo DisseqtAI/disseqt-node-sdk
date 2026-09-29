@@ -9,7 +9,6 @@ import { McpTargetsClient, RagTargetsClient, VulnerabilitiesClient } from './mis
 import { PacksClient } from './packs.js';
 import { PlanRunsClient } from './planRuns.js';
 import { PlansClient } from './plans.js';
-import { RagValidationsClient } from './ragValidations.js';
 import { RedteamClient } from './redteam.js';
 import { RESOURCES_DEFAULT_BASE_URL, type ResourceClientConfig } from './base.js';
 import { RunsClient } from './runs.js';
@@ -44,7 +43,6 @@ export class DisseqtResourceClient {
   readonly packs: PacksClient;
   readonly runs: RunsClient;
   readonly validations: ValidationsClient;
-  readonly ragValidations: RagValidationsClient;
   readonly sessions: SessionsClient;
   readonly customValidators: CustomValidatorsClient;
   readonly ragTargets: RagTargetsClient;
@@ -77,7 +75,6 @@ export class DisseqtResourceClient {
     this.packs = new PacksClient(shared);
     this.runs = new RunsClient(shared);
     this.validations = new ValidationsClient(shared);
-    this.ragValidations = new RagValidationsClient(shared);
     this.sessions = new SessionsClient(shared);
     this.customValidators = new CustomValidatorsClient(shared);
     this.ragTargets = new RagTargetsClient(shared);

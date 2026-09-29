@@ -25,6 +25,13 @@
   verbs cover the same flows through testing sessions and mr-jailbreak.
 - `disseqt logout --local-only`. Logout is now local-only by definition
   (see Changed); revoke keys from the dashboard.
+- **`RagValidationsClient` (`client.ragValidations`) and the
+  `disseqt rag-validation` CLI group.** The rag-validation routes exist only
+  on the browser-session mount (`/api/v1/prompt-packs/...`); there is no
+  service-key (`/api/v1/sdk/...`) mount, so API-key callers always got
+  `ErrAuthHeaderRequired`.
+- `PacksClient.restore` / `importStatus` and `RunsClient.retrievalTraces`:
+  not registered on the `/api/v1/sdk/prompt-packs` mount.
 
 ### Fixed
 
@@ -83,6 +90,15 @@
 
 ### Changed
 
+- **Prompt-pack resources moved to the service-key mount.** `PacksClient`,
+  `RunsClient` and `ValidationsClient` (and the `disseqt pack` / `run` /
+  `validation` verbs) now call `/api/v1/sdk/prompt-packs/...` instead of
+  `/api/v1/prompt-packs/...`. The latter is the browser-session mount
+  (`externalAuthMiddleware`) and rejects `X-API-Key` callers with
+  `ErrAuthHeaderRequired`; the sdk mount (`sdkPromptPackRoutes` in
+  `api/server.go`) carries the same packs / prompts / runs /
+  output-validations surface. Targets, rag/mcp targets, custom validators,
+  vulnerabilities, plans and plan-runs keep their current paths.
 - **Auth contract.** The SDK and CLI send only `X-API-Key` + `X-Project-Id`;
   the gateway injects the service key and identity. No service-key header
   is ever set client-side.

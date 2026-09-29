@@ -1,12 +1,12 @@
 import type { JsonObject, JsonValue, QueryParams } from '../http/types.js';
 import { ResourceBase } from './base.js';
 
-const PACKS = '/api/v1/prompt-packs';
+const PACKS = '/api/v1/sdk/prompt-packs';
 
 /**
  * Prompt-pack runs.
- * Create is pack-scoped (`/prompt-packs/:id/runs`);
- * everything else keys off `run_id` under `/prompt-packs/runs/:run_id`.
+ * Create is pack-scoped (`/sdk/prompt-packs/:id/runs`);
+ * everything else keys off `run_id` under `/sdk/prompt-packs/runs/:run_id`.
  */
 export class RunsClient extends ResourceBase {
   create(packId: string, payload: JsonValue): Promise<JsonObject> {
@@ -27,14 +27,6 @@ export class RunsClient extends ResourceBase {
 
   outputs(runId: string, params?: QueryParams): Promise<JsonObject> {
     return this._request('GET', `${PACKS}/runs/${runId}/outputs`, params ? { params } : {});
-  }
-
-  retrievalTraces(runId: string, params?: QueryParams): Promise<JsonObject> {
-    return this._request(
-      'GET',
-      `${PACKS}/runs/${runId}/retrieval-traces`,
-      params ? { params } : {},
-    );
   }
 
   compare(packId: string, params?: QueryParams): Promise<JsonObject> {

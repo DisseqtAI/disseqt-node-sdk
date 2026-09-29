@@ -1,7 +1,9 @@
 import type { JsonObject, JsonValue, QueryParams } from '../http/types.js';
 import { ResourceBase } from './base.js';
 
-const ROOT = '/api/v1/prompt-packs';
+// Service-key mount (server.go sdkPromptPackRoutes). /api/v1/prompt-packs is
+// the browser-session mount and rejects API-key callers (ErrAuthHeaderRequired).
+const ROOT = '/api/v1/sdk/prompt-packs';
 
 /** Prompt-pack CRUD + related actions (publish, duplicate, download, etc). */
 export class PacksClient extends ResourceBase {
@@ -33,26 +35,14 @@ export class PacksClient extends ResourceBase {
     );
   }
 
-  /**
-   * Publish a pack. Backend registers PATCH at both mounts:
-   * /api/v1/prompt-packs/:id/publish (server.go:2237) and
-   * /api/v1/sdk/prompt-packs/:id/publish (server.go:2460).
-   */
+  /** PATCH /:id/publish (server.go sdkPromptPackRoutes). */
   publish(id: string): Promise<JsonObject> {
     return this._request('PATCH', `${ROOT}/${id}/publish`);
   }
 
-  /** See {@link publish}. Backend PATCHes at server.go:2238, 2461. */
+  /** PATCH /:id/unpublish. */
   unpublish(id: string): Promise<JsonObject> {
     return this._request('PATCH', `${ROOT}/${id}/unpublish`);
-  }
-
-  restore(id: string): Promise<JsonObject> {
-    return this._request('POST', `${ROOT}/${id}/restore`);
-  }
-
-  importStatus(id: string): Promise<JsonObject> {
-    return this._request('GET', `${ROOT}/${id}/import-status`);
   }
 
   download(id: string): Promise<{ status: number; headers: Headers; text: string }> {

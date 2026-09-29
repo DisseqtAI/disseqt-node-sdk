@@ -36,7 +36,6 @@ describe('DisseqtResourceClient', () => {
     expect(client.packs).toBeDefined();
     expect(client.runs).toBeDefined();
     expect(client.validations).toBeDefined();
-    expect(client.ragValidations).toBeDefined();
     expect(client.sessions).toBeDefined();
     expect(client.customValidators).toBeDefined();
     expect(client.ragTargets).toBeDefined();
@@ -118,28 +117,29 @@ describe('TargetsClient', () => {
 });
 
 describe('PacksClient', () => {
-  it('CRUD hits /api/v1/prompt-packs', async () => {
+  // /api/v1/prompt-packs is the browser-session mount; API-key callers must
+  // use the service-key mount /api/v1/sdk/prompt-packs (server.go sdkPromptPackRoutes).
+  it('CRUD hits /api/v1/sdk/prompt-packs', async () => {
     const { client, fetcher } = makeClient();
     await client.packs.list();
-    expect(lastCall(fetcher)[0]).toBe(`${RESOURCES_DEFAULT_BASE_URL}/api/v1/prompt-packs`);
+    expect(lastCall(fetcher)[0]).toBe(`${RESOURCES_DEFAULT_BASE_URL}/api/v1/sdk/prompt-packs`);
     await client.packs.get('p1');
-    expect(lastCall(fetcher)[0]).toContain('/prompt-packs/p1');
+    expect(lastCall(fetcher)[0]).toContain('/api/v1/sdk/prompt-packs/p1');
     await client.packs.publish('p1');
     expect(lastCall(fetcher)[0]).toContain('/prompt-packs/p1/publish');
   });
 
-  // G3 regression: backend registers PATCH at /prompt-packs/:id/publish
-  // (server.go:2237, 2460); POST is a 404.
+  // G3 regression: backend registers PATCH at /sdk/prompt-packs/:id/publish; POST is a 404.
   it('publish/unpublish use PATCH', async () => {
     const { client, fetcher } = makeClient();
     await client.packs.publish('p1');
     let [url, init] = lastCall(fetcher);
-    expect(url).toBe(`${RESOURCES_DEFAULT_BASE_URL}/api/v1/prompt-packs/p1/publish`);
+    expect(url).toBe(`${RESOURCES_DEFAULT_BASE_URL}/api/v1/sdk/prompt-packs/p1/publish`);
     expect(init?.method).toBe('PATCH');
 
     await client.packs.unpublish('p1');
     [url, init] = lastCall(fetcher);
-    expect(url).toBe(`${RESOURCES_DEFAULT_BASE_URL}/api/v1/prompt-packs/p1/unpublish`);
+    expect(url).toBe(`${RESOURCES_DEFAULT_BASE_URL}/api/v1/sdk/prompt-packs/p1/unpublish`);
     expect(init?.method).toBe('PATCH');
   });
 });
@@ -148,13 +148,15 @@ describe('RunsClient', () => {
   it('create nests under packId', async () => {
     const { client, fetcher } = makeClient();
     await client.runs.create('p1', { target_id: 't1' });
-    expect(lastCall(fetcher)[0]).toBe(`${RESOURCES_DEFAULT_BASE_URL}/api/v1/prompt-packs/p1/runs`);
+    expect(lastCall(fetcher)[0]).toBe(
+      `${RESOURCES_DEFAULT_BASE_URL}/api/v1/sdk/prompt-packs/p1/runs`,
+    );
   });
 
   it('get/cancel/report key off runId', async () => {
     const { client, fetcher } = makeClient();
     await client.runs.get('r1');
-    expect(lastCall(fetcher)[0]).toContain('/prompt-packs/runs/r1');
+    expect(lastCall(fetcher)[0]).toContain('/api/v1/sdk/prompt-packs/runs/r1');
     await client.runs.cancel('r1');
     expect(lastCall(fetcher)[0]).toContain('/runs/r1/cancel');
     await client.runs.report('r1');
@@ -163,24 +165,14 @@ describe('RunsClient', () => {
 });
 
 describe('ValidationsClient', () => {
-  it('create routes under run, others under prompt-packs/output-validations', async () => {
+  it('create routes under run, others under sdk/prompt-packs/output-validations', async () => {
     const { client, fetcher } = makeClient();
     await client.validations.create('r1', { validator: 'x' });
-    expect(lastCall(fetcher)[0]).toContain('/api/v1/prompt-packs/runs/r1/validate-outputs');
+    expect(lastCall(fetcher)[0]).toContain('/api/v1/sdk/prompt-packs/runs/r1/validate-outputs');
     await client.validations.get('v1');
-    expect(lastCall(fetcher)[0]).toContain('/api/v1/prompt-packs/output-validations/v1');
+    expect(lastCall(fetcher)[0]).toContain('/api/v1/sdk/prompt-packs/output-validations/v1');
     await client.validations.cancel('v1');
-    expect(lastCall(fetcher)[0]).toContain('/api/v1/prompt-packs/output-validations/v1/cancel');
-  });
-});
-
-describe('RagValidationsClient', () => {
-  it('creates against a run and gets by id under prompt-packs/rag-validations', async () => {
-    const { client, fetcher } = makeClient();
-    await client.ragValidations.create('r1', {});
-    expect(lastCall(fetcher)[0]).toContain('/api/v1/prompt-packs/runs/r1/rag-validate');
-    await client.ragValidations.get('rv1');
-    expect(lastCall(fetcher)[0]).toContain('/api/v1/prompt-packs/rag-validations/rv1');
+    expect(lastCall(fetcher)[0]).toContain('/api/v1/sdk/prompt-packs/output-validations/v1/cancel');
   });
 });
 

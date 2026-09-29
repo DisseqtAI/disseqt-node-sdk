@@ -1,8 +1,8 @@
 import type { JsonObject, JsonValue, QueryParams } from '../http/types.js';
 import { ResourceBase } from './base.js';
 
-const PACKS = '/api/v1/prompt-packs';
-const OV = '/api/v1/prompt-packs/output-validations';
+const PACKS = '/api/v1/sdk/prompt-packs';
+const OV = `${PACKS}/output-validations`;
 
 /** Output-validations. */
 export class ValidationsClient extends ResourceBase {

@@ -275,45 +275,6 @@ export function registerValidation(program: Command): void {
   );
 }
 
-/** rag-validation group */
-export function registerRagValidation(program: Command): void {
-  const cmd = program.command('rag-validation').description('RAG output validations');
-  commonJson(
-    cmd
-      .command('create <runId>')
-      .requiredOption('--body <json|file|->', 'request body')
-      .action(async (runId: string, opts: CommonOpts & { body: string }) => {
-        await runAction(async () =>
-          emit(
-            await buildClient().ragValidations.create(runId, readBody(opts.body) as never),
-            opts.json === true,
-          ),
-        );
-      }),
-  );
-  commonJson(
-    cmd.command('get <id>').action(async (id: string, opts: CommonOpts) => {
-      await runAction(async () =>
-        emit(await buildClient().ragValidations.get(id), opts.json === true),
-      );
-    }),
-  );
-  commonJson(
-    cmd.command('list <runId>').action(async (runId: string, opts: CommonOpts) => {
-      await runAction(async () =>
-        emit(await buildClient().ragValidations.listForRun(runId), opts.json === true),
-      );
-    }),
-  );
-  commonJson(
-    cmd.command('cancel <id>').action(async (id: string, opts: CommonOpts) => {
-      await runAction(async () =>
-        emit(await buildClient().ragValidations.cancel(id), opts.json === true),
-      );
-    }),
-  );
-}
-
 /** session group */
 export function registerSession(program: Command): void {
   const cmd = program.command('session').description('testing sessions');

@@ -110,20 +110,20 @@ describe('disseqt CLI', () => {
   it('lists packs', async () => {
     const result = await runCli(['pack', 'list', '--json']);
     expect(result.code).toBe(0);
-    expect(requests.at(-1)?.url).toBe('/api/v1/prompt-packs');
+    expect(requests.at(-1)?.url).toBe('/api/v1/sdk/prompt-packs');
   });
 
   it('creates a run against a pack', async () => {
     const result = await runCli(['run', 'create', 'p1', '--body', '{"target_id":"t1"}']);
     expect(result.code).toBe(0);
-    expect(requests.at(-1)?.url).toBe('/api/v1/prompt-packs/p1/runs');
+    expect(requests.at(-1)?.url).toBe('/api/v1/sdk/prompt-packs/p1/runs');
   });
 
   it('watches a run and completes on terminal status', async () => {
     const result = await runCli(['run', 'watch', 'r1', '--json']);
     expect(result.code).toBe(0);
     expect(result.stdout).toContain('completed');
-    expect(requests.at(-1)?.url).toBe('/api/v1/prompt-packs/runs/r1');
+    expect(requests.at(-1)?.url).toBe('/api/v1/sdk/prompt-packs/runs/r1');
   });
 
   it('renders validation help', async () => {

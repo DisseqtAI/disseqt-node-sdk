@@ -503,6 +503,7 @@ Defaults used when you don't override them:
 | Composite route                 | `POST /api/v1/validators/composite/evaluate`                  |
 | Prompt-packs base URL           | `https://api.disseqt.ai`                                      |
 | Resources / CLI base URL        | `https://api.disseqt.ai/dataset` (`DISSEQT_BASE_URL`)         |
+| Prompt-pack resource routes     | `/api/v1/sdk/prompt-packs/...` (service-key mount)            |
 | Prompt-packs path prefix        | `/sdk/prompt-packs/api/v1/sdk/prompt-packs`                   |
 | Agentic tracing endpoint        | `https://api.disseqt.ai/agentic-monitoring/api/v1/traces`     |
 | Auth headers                    | `X-API-Key`, `X-Project-Id`, `Content-Type: application/json` |
