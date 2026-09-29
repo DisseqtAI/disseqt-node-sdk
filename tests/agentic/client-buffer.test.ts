@@ -108,8 +108,13 @@ describe('AgenticHTTPTransport', () => {
     expect(fetcher.mock.calls[1]?.[1]).toEqual(
       expect.objectContaining({
         method: 'POST',
+        // N2: X-Api-Key/X-Project-Id are now sent as headers too (see
+        // tests/agentic/tracing-identity-headers.test.ts for the dedicated
+        // coverage) -- this span carries project_id: 'project'.
         headers: {
           'Content-Type': 'application/json',
+          'X-Api-Key': 'api-key',
+          'X-Project-Id': 'project',
         },
       }),
     );
