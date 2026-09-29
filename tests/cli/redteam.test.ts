@@ -151,7 +151,7 @@ describe('disseqt redteam CLI', () => {
     const seen = requests.slice(before).map((r) => r.url);
     expect(seen).toContain('/api/v1/testing/attack-techniques');
     expect(seen).toContain('/api/v1/mr-jailbreak/techniques');
-    expect(seen).toContain('/api/v1/mr-jailbreak/agents');
+    expect(seen).toContain('/api/v1/mr-jailbreak/agents?page_id=1&page-size=100');
     const parsed: unknown = JSON.parse(result.stdout);
     expect(parsed).toHaveProperty('single_turn');
     expect(parsed).toHaveProperty('multi_turn');
@@ -169,6 +169,9 @@ describe('disseqt redteam CLI', () => {
   it('list-personas filters by attack_type client-side', async () => {
     const result = await runCli(['redteam', 'list-personas', '--attack-type', 'jailbreak']);
     expect(result.code).toBe(0);
+    expect(requests.at(-1)?.url).toBe(
+      '/api/v1/mr-jailbreak/agents?page_id=1&page-size=100&attack_type=jailbreak',
+    );
     const parsed = JSON.parse(result.stdout) as { attack_type?: string }[];
     expect(Array.isArray(parsed)).toBe(true);
     expect(parsed).toHaveLength(1);

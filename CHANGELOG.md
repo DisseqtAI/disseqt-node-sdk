@@ -61,6 +61,11 @@
   - `vuln-test` and `vulnerability test` send `{app_integration_id}` (or
     `--llm-config`) with `?project_id&organization_id`.
   - `status` / `results` fall back to mr-jailbreak only on a 404.
+- `RedteamClient.listAgents` (`redteam list-attacks --kind agents`,
+  `list-personas`) sends the `page_id=1&page-size=100` query the backend
+  requires (`ListJailbreakAgentsRequest`, kebab-case `page-size`) instead of
+  getting a 400; it accepts optional paging/filter params, and
+  `list-personas --attack-type` is forwarded server-side.
 - `disseqt scan` exits 1 when no validator request succeeded or any batch
   failed (config errors stay exit 2), prints the first failure, and stops
   after the first 401/403 instead of replaying it for every batch.

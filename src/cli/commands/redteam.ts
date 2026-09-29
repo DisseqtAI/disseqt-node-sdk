@@ -258,7 +258,9 @@ export function registerRedteam(program: Command): void {
     .option('--attack-type <type>', 'filter personas by attack_type field if present')
     .action(async (opts: { attackType?: string }) => {
       await runAction(async () => {
-        const payload: unknown = await rt().listAgents();
+        const payload: unknown = await rt().listAgents(
+          opts.attackType !== undefined ? { attack_type: opts.attackType } : undefined,
+        );
         let out: unknown = payload;
         if (opts.attackType !== undefined && Array.isArray(payload)) {
           out = payload.filter(

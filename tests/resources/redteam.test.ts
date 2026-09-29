@@ -42,10 +42,15 @@ describe('RedteamClient — catalog', () => {
     expect(lastCall(fetcher)[0]).toBe(`${BASE}/api/v1/mr-jailbreak/techniques`);
   });
 
-  it('lists agents', async () => {
+  // Backend requires page_id + kebab-case page-size (jailbreak_agents_handlers.go:52-54).
+  it('lists agents with the required paging params', async () => {
     const { client, fetcher } = makeClient();
     await client.redteam.listAgents();
-    expect(lastCall(fetcher)[0]).toBe(`${BASE}/api/v1/mr-jailbreak/agents`);
+    expect(lastCall(fetcher)[0]).toBe(`${BASE}/api/v1/mr-jailbreak/agents?page_id=1&page-size=100`);
+    await client.redteam.listAgents({ page_id: 2, 'page-size': 5, attack_type: 'jailbreak' });
+    expect(lastCall(fetcher)[0]).toBe(
+      `${BASE}/api/v1/mr-jailbreak/agents?page_id=2&page-size=5&attack_type=jailbreak`,
+    );
   });
 
   it('list-attacks kind=all fetches three endpoints', async () => {
@@ -54,7 +59,7 @@ describe('RedteamClient — catalog', () => {
     const urls = fetcher.mock.calls.map((c) => String(c[0]));
     expect(urls).toContain(`${BASE}/api/v1/testing/attack-techniques`);
     expect(urls).toContain(`${BASE}/api/v1/mr-jailbreak/techniques`);
-    expect(urls).toContain(`${BASE}/api/v1/mr-jailbreak/agents`);
+    expect(urls).toContain(`${BASE}/api/v1/mr-jailbreak/agents?page_id=1&page-size=100`);
   });
 
   it('list-attacks kind=single hits only single-turn', async () => {
@@ -68,7 +73,7 @@ describe('RedteamClient — catalog', () => {
     const { client, fetcher } = makeClient();
     await client.redteam.listAttacks('agents');
     expect(fetcher.mock.calls).toHaveLength(1);
-    expect(lastCall(fetcher)[0]).toBe(`${BASE}/api/v1/mr-jailbreak/agents`);
+    expect(lastCall(fetcher)[0]).toBe(`${BASE}/api/v1/mr-jailbreak/agents?page_id=1&page-size=100`);
   });
 });
 

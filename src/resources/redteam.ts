@@ -106,9 +106,16 @@ export class RedteamClient extends ResourceBase {
     return this._requestAny('GET', `${MR}/techniques`);
   }
 
-  /** GET /api/v1/mr-jailbreak/agents — array response. */
-  listAgents(): Promise<unknown> {
-    return this._requestAny('GET', `${MR}/agents`);
+  /**
+   * GET /api/v1/mr-jailbreak/agents — array response. The backend binds
+   * `page_id` (min 1) and kebab-case `page-size` (5..100) as required form
+   * params (jailbreak_agents_handlers.go ListJailbreakAgentsRequest); defaults
+   * fetch the first full page. `risk_level` / `attack_type` are optional filters.
+   */
+  listAgents(params?: QueryParams): Promise<unknown> {
+    return this._requestAny('GET', `${MR}/agents`, {
+      params: { page_id: 1, 'page-size': 100, ...params },
+    });
   }
 
   /**
