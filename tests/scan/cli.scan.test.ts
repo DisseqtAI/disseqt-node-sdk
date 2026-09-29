@@ -23,20 +23,17 @@ beforeAll(async () => {
         return;
       }
       res.writeHead(200, { 'Content-Type': 'application/json' });
-      // Return a single finding so exit code + rendered output can be asserted.
+      // disseqt-go compat envelope from the llm-judge route: a failing score
+      // yields one finding per chunk so exit code + rendered output can be asserted.
       res.end(
         JSON.stringify({
           data: {
-            findings: [
-              {
-                file_path: 'a.py',
-                vulnerability: 'SQL injection',
-                vulnerability_type: 'sql-injection',
-                severity: 'high',
-                reason: 'String-concat SQL',
-                line_start: 1,
-              },
-            ],
+            metric_name: 'llm-judge-sql-injection',
+            actual_value: 0.8,
+            metric_labels: ['fail'],
+            threshold: ['fail'],
+            threshold_score: 0.5,
+            others: { reason: 'String-concat SQL' },
           },
         }),
       );
@@ -110,11 +107,12 @@ describe('disseqt scan CLI', () => {
     const parsed = JSON.parse(raw) as { version: string; runs: unknown[] };
     expect(parsed.version).toBe('2.1.0');
     expect(parsed.runs).toHaveLength(1);
-    // Backend was hit for the sql-injection validator.
+    // Bare --validator names are normalised to the llm-judge-* metric the route serves.
     const hit = requests.find(
-      (r) => r.url === '/api/v1/sdk/validators/input-validation/sql-injection',
+      (r) => r.url === '/api/v1/sdk/validators/input-validation/llm-judge-sql-injection',
     );
     expect(hit?.method).toBe('POST');
+    expect(raw).toContain('String-concat SQL');
   });
 
   it('honours --no-fail-on-findings', async () => {
@@ -137,7 +135,7 @@ describe('disseqt scan CLI', () => {
       { DISSEQT_API_KEY: 'bad' },
     );
     expect(result.code).toBe(1);
-    expect(result.stderr).toContain('error: validator bfla');
+    expect(result.stderr).toContain('error: validator llm-judge-bfla');
     expect(requests.length - before).toBe(1);
   });
 

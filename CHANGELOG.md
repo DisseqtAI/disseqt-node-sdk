@@ -66,6 +66,17 @@
   requires (`ListJailbreakAgentsRequest`, kebab-case `page-size`) instead of
   getting a 400; it accepts optional paging/filter params, and
   `list-personas --attack-type` is forwarded server-side.
+- **`disseqt scan` no longer 404s on every batch.** The judge route
+  `POST /api/v1/sdk/validators/input-validation/{validator}` serves only
+  `llm-judge-*` metrics; the defaults are now `llm-judge-bfla`, `-bola`,
+  `-rbac`, `-shell-injection`, `-debug-access`, `-intellectual-property`,
+  and user-supplied names (`--validator`, `.disseqt-code-scan.yaml`) are
+  normalised (`llm-judge-` prefix added when missing, `_` → `-`). The
+  route's disseqt-go compat envelope
+  (`{data:{metric_name, actual_value, metric_labels, threshold,
+threshold_score, others}}`) is turned into one finding per chunk when
+  `actual_value` reaches `threshold_score`, with severity from a severity
+  label or the 0–1 score; a `findings[]` list is still honoured.
 - `disseqt scan` exits 1 when no validator request succeeded or any batch
   failed (config errors stay exit 2), prints the first failure, and stops
   after the first 401/403 instead of replaying it for every batch.

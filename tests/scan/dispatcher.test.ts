@@ -3,10 +3,13 @@ import { describe, expect, it, vi } from 'vitest';
 import { DisseqtHttpError } from '../../src/http/errors.js';
 
 import {
+  APPSEC_VALIDATORS,
   batchChunks,
   dispatch,
   extractFindingsList,
+  findingsFromMetric,
   newDispatchStats,
+  normalizeValidator,
   resolveBatchChars,
   validatorPath,
 } from '../../src/scan/index.js';
@@ -37,7 +40,24 @@ describe('dispatcher', () => {
   });
 
   it('validatorPath renders the {domain}/{validator} template', () => {
-    expect(validatorPath('bfla')).toBe('/api/v1/sdk/validators/input-validation/bfla');
+    expect(validatorPath('llm-judge-bfla')).toBe(
+      '/api/v1/sdk/validators/input-validation/llm-judge-bfla',
+    );
+  });
+
+  // The judge route serves llm-judge-* metrics only; bare names 404.
+  it('normalizeValidator prefixes llm-judge- and kebab-cases', () => {
+    expect(normalizeValidator('bfla')).toBe('llm-judge-bfla');
+    expect(normalizeValidator('Shell_Injection')).toBe('llm-judge-shell-injection');
+    expect(normalizeValidator('llm-judge-bola')).toBe('llm-judge-bola');
+    expect(APPSEC_VALIDATORS).toEqual([
+      'llm-judge-bfla',
+      'llm-judge-bola',
+      'llm-judge-rbac',
+      'llm-judge-shell-injection',
+      'llm-judge-debug-access',
+      'llm-judge-intellectual-property',
+    ]);
   });
 
   it('batchChunks groups under batchChars', async () => {
@@ -59,7 +79,7 @@ describe('dispatcher', () => {
 
   it('dispatch POSTs each batch to every validator and aggregates findings', async () => {
     const transport: ScanTransport = vi.fn(async (_method, path) => {
-      if (path.endsWith('/bfla')) {
+      if (path.endsWith('/llm-judge-bfla')) {
         return {
           data: {
             findings: [
@@ -88,13 +108,66 @@ describe('dispatcher', () => {
     expect(stats.batches_ok).toBe(2);
     expect(stats.batches_failed).toBe(0);
     expect(findings).toHaveLength(1);
-    expect(findings[0]?.validator).toBe('bfla');
+    expect(findings[0]?.validator).toBe('llm-judge-bfla');
     expect(findings[0]?.severity).toBe('high');
+    const paths = (transport as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[1]);
+    expect(paths).toEqual([
+      '/api/v1/sdk/validators/input-validation/llm-judge-bfla',
+      '/api/v1/sdk/validators/input-validation/llm-judge-bola',
+    ]);
+  });
+
+  it('dispatch turns a compat metric envelope into one finding per chunk', async () => {
+    const transport: ScanTransport = vi.fn(async () => ({
+      data: {
+        metric_name: 'llm-judge-bfla',
+        actual_value: 0.82,
+        metric_labels: ['fail'],
+        threshold: ['fail'],
+        threshold_score: 0.5,
+        others: { reason: 'endpoint skips the authorization check' },
+      },
+    }));
+    const chunks = [chunk('a.ts', 'code\n', 1, 3), chunk('b.ts', 'code\n', 10, 12)];
+    const findings = await collect(dispatch(chunks, ['bfla'], transport, { batchChars: 1000 }));
+    expect(findings).toHaveLength(2);
+    expect(findings.map((f) => f.file_path)).toEqual(['a.ts', 'b.ts']);
+    expect(findings[0]).toMatchObject({
+      vulnerability: 'llm-judge-bfla',
+      vulnerability_type: 'bfla',
+      severity: 'high',
+      reason: 'endpoint skips the authorization check',
+      line_start: 1,
+      line_end: 3,
+      validator: 'llm-judge-bfla',
+    });
+  });
+
+  it('findingsFromMetric: below threshold → none; severity label wins over score', () => {
+    const batch = { chunks: [chunk('a.ts', 'x')] };
+    expect(
+      findingsFromMetric(
+        { data: { actual_value: 0.2, threshold_score: 0.5 } },
+        'llm-judge-bola',
+        batch,
+      ),
+    ).toEqual([]);
+    expect(
+      findingsFromMetric(
+        { data: { actual_value: 0.95, metric_labels: ['medium'], threshold_score: 0.5 } },
+        'llm-judge-bola',
+        batch,
+      )[0]?.severity,
+    ).toBe('medium');
+    expect(
+      findingsFromMetric({ data: { actual_value: 0.95 } }, 'llm-judge-bola', batch)[0]?.severity,
+    ).toBe('critical');
+    expect(findingsFromMetric({ data: { findings: [] } }, 'llm-judge-bola', batch)).toEqual([]);
   });
 
   it('dispatch tolerates per-batch errors', async () => {
     const transport: ScanTransport = vi.fn(async (_method, path) => {
-      if (path.endsWith('/bfla')) throw new Error('backend down');
+      if (path.endsWith('/llm-judge-bfla')) throw new Error('backend down');
       return { data: { findings: [] } };
     });
     const stats = newDispatchStats();
@@ -104,7 +177,7 @@ describe('dispatcher', () => {
     expect(findings).toHaveLength(0);
     expect(stats.batches_failed).toBe(1);
     expect(stats.batches_ok).toBe(1);
-    expect(stats.first_error).toBe('validator bfla: backend down');
+    expect(stats.first_error).toBe('validator llm-judge-bfla: backend down');
   });
 
   it('dispatch stops after the first 401/403', async () => {

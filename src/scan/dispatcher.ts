@@ -3,10 +3,22 @@
 import type { DisseqtHttpTransport } from '../http/index.js';
 import { DisseqtHttpError } from '../http/errors.js';
 import { stripTrailingSlashes } from '../http/url.js';
-import type { CodeChunk, CodeFinding, Severity } from './schema.js';
+import { SEVERITY_ORDER, type CodeChunk, type CodeFinding, type Severity } from './schema.js';
 
 export const DEFAULT_BATCH_CHARS = 40_000;
 export const BATCH_CHARS_ENV = 'DISSEQT_SCAN_CONTEXT_LIMIT';
+
+/**
+ * `POST /api/v1/sdk/validators/input-validation/{validator}` serves only
+ * `llm-judge-*` metrics; a bare name 404s ("unknown judge metric").
+ */
+export const JUDGE_PREFIX = 'llm-judge-';
+
+/** `bfla` / `Shell_Injection` / `llm-judge-bfla` → `llm-judge-bfla`. */
+export function normalizeValidator(name: string): string {
+  const slug = name.trim().toLowerCase().replace(/_/g, '-');
+  return slug.startsWith(JUDGE_PREFIX) ? slug : `${JUDGE_PREFIX}${slug}`;
+}
 
 /** App-security judges — default set for `disseqt scan`. */
 export const APPSEC_VALIDATORS: readonly string[] = [
@@ -16,7 +28,7 @@ export const APPSEC_VALIDATORS: readonly string[] = [
   'shell-injection',
   'debug-access',
   'intellectual-property',
-];
+].map(normalizeValidator);
 
 /** Validators that exist on disseqt-go today; a safe fallback. */
 export const FALLBACK_VALIDATORS: readonly string[] = [
@@ -24,7 +36,10 @@ export const FALLBACK_VALIDATORS: readonly string[] = [
   'prompt-injection',
   'data-leakage',
   'insecure-output',
-];
+].map(normalizeValidator);
+
+/** Compat envelope scores below this (when the server sends no threshold_score) are "passed". */
+const DEFAULT_THRESHOLD_SCORE = 0.5;
 
 export const VALIDATOR_DOMAIN = 'input-validation';
 const VALIDATOR_PATH_TEMPLATE = '/api/v1/sdk/validators/{domain}/{validator}';
@@ -127,6 +142,14 @@ function buildPayload(batch: ChunkBatch, validator: string): Record<string, unkn
       chunk_count: batch.chunks.length,
     },
   };
+}
+
+/** 0–1 judge score (higher = worse) → severity ladder. */
+function severityFromScore(score: number): Severity {
+  if (score >= 0.9) return 'critical';
+  if (score >= 0.7) return 'high';
+  if (score >= 0.4) return 'medium';
+  return 'low';
 }
 
 function coerceSeverity(value: unknown): Severity {
@@ -242,6 +265,59 @@ export function extractFindingsList(envelope: unknown): Record<string, unknown>[
   return [];
 }
 
+/**
+ * disseqt-go compat envelope from the judge route:
+ * `{data:{metric_name, actual_value, metric_labels, threshold, threshold_score, others}}`.
+ * One finding per chunk in the batch when `actual_value` reaches
+ * `threshold_score`; severity from a severity-word label, else the score.
+ */
+export function findingsFromMetric(
+  envelope: unknown,
+  validator: string,
+  batch: ChunkBatch,
+): CodeFinding[] {
+  if (envelope === null || typeof envelope !== 'object') return [];
+  const env = envelope as Record<string, unknown>;
+  const data = (env['data'] ?? env) as Record<string, unknown>;
+  const score = data['actual_value'];
+  if (typeof score !== 'number' || !Number.isFinite(score)) return [];
+  const threshold =
+    typeof data['threshold_score'] === 'number' ? data['threshold_score'] : DEFAULT_THRESHOLD_SCORE;
+  if (score < threshold) return [];
+
+  const labels = Array.isArray(data['metric_labels'])
+    ? data['metric_labels'].filter((l): l is string => typeof l === 'string')
+    : [];
+  const labelSeverity = labels.map((l) => l.toLowerCase()).find((l) => l in SEVERITY_ORDER);
+  const severity =
+    labelSeverity !== undefined ? (labelSeverity as Severity) : severityFromScore(score);
+  const others =
+    data['others'] !== null && typeof data['others'] === 'object'
+      ? (data['others'] as Record<string, unknown>)
+      : {};
+  const metric = readString(data, 'metric_name') ?? validator;
+  const vulnType = validator.startsWith(JUDGE_PREFIX)
+    ? validator.slice(JUDGE_PREFIX.length)
+    : validator;
+  const reason =
+    readString(others, 'reason', 'explanation', 'rationale', 'summary') ??
+    `${metric} scored ${score.toFixed(2)} (threshold ${threshold})${labels.length > 0 ? `: ${labels.join(', ')}` : ''}`;
+  const recommendation = readString(others, 'recommendation', 'fix', 'remediation');
+
+  return batch.chunks.map((chunk) => ({
+    file_path: chunk.file_path,
+    vulnerability: metric,
+    vulnerability_type: vulnType,
+    severity,
+    reason,
+    line_start: chunk.start_line,
+    line_end: chunk.end_line,
+    recommendation,
+    code_snippet: null,
+    validator,
+  }));
+}
+
 export interface DispatchOptions {
   batchChars?: number;
   transport?: ScanTransport;
@@ -257,13 +333,14 @@ export interface DispatchOptions {
  */
 export async function* dispatch(
   chunks: AsyncIterable<CodeChunk> | Iterable<CodeChunk>,
-  validators: readonly string[],
+  rawValidators: readonly string[],
   transport: ScanTransport,
   options: DispatchOptions = {},
 ): AsyncIterableIterator<CodeFinding> {
   const stats = options.stats ?? newDispatchStats();
   const batchChars = options.batchChars ?? DEFAULT_BATCH_CHARS;
-  if (validators.length === 0) return;
+  if (rawValidators.length === 0) return;
+  const validators = rawValidators.map(normalizeValidator);
 
   // Materialise so we can report total up front (parity with Python's list(...) call).
   const batches: ChunkBatch[] = [];
@@ -295,9 +372,11 @@ export async function* dispatch(
         continue;
       }
       stats.batches_ok += 1;
-      for (const raw of extractFindingsList(envelope)) {
-        const finding = findingFromDict(raw, validator, batch);
-        if (finding === null) continue;
+      const listed = extractFindingsList(envelope)
+        .map((raw) => findingFromDict(raw, validator, batch))
+        .filter((f): f is CodeFinding => f !== null);
+      const found = listed.length > 0 ? listed : findingsFromMetric(envelope, validator, batch);
+      for (const finding of found) {
         stats.findings_by_validator[validator] = (stats.findings_by_validator[validator] ?? 0) + 1;
         yield finding;
       }

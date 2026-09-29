@@ -287,9 +287,13 @@ All paths are under `/api/v1`. Responses are the backend's
 disseqt scan . --format sarif -o report.sarif --diff main..HEAD
 ```
 
-Exits 1 when findings remain (unless `--no-fail-on-findings`), when no
-validator request succeeded, or when any batch failed; stops after the
-first 401/403.
+Validators are the `llm-judge-*` metrics served by
+`POST /api/v1/sdk/validators/input-validation/{validator}`; bare names from
+`--validator` or `.disseqt-code-scan.yaml` are normalised (`bfla` →
+`llm-judge-bfla`, `_` → `-`). Defaults: bfla, bola, rbac, shell-injection,
+debug-access, intellectual-property. Exits 1 when findings remain (unless
+`--no-fail-on-findings`), when no validator request succeeded, or when any
+batch failed; stops after the first 401/403.
 
 ---
 
