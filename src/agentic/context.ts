@@ -18,10 +18,19 @@ interface ContextStore {
 const asyncLocalStorage = new AsyncLocalStorage<ContextStore>();
 
 // Fallback store for code that constructs DisseqtTrace/DisseqtSpan directly
-// without going through TraceWrapper.run() (e.g. existing tests, or any
-// caller using the low-level API outside of an isolated context). This
-// preserves the pre-existing single-global behavior for that usage pattern;
-// it is not concurrency-safe, same as before this fix.
+// without going through TraceWrapper.run() or runInIsolatedContext()
+// (e.g. existing tests, or any caller using the low-level API outside of
+// an isolated context). This preserves the pre-existing single-global
+// behavior for that usage pattern -- it is NOT concurrency-safe, same as
+// before this fix. Two concurrent flows that both construct
+// DisseqtTrace/DisseqtSpan directly (never calling startTrace(...).run(),
+// and never wrapping their own code in runInIsolatedContext()) can still
+// clobber each other's "current trace"/"current span" here exactly as
+// they could before this fix. If your framework can't express a request
+// as one wrapping callback (e.g. a trace started in one middleware, spans
+// added in route handlers, ended in a later middleware), wrap that
+// request's entire handling in runInIsolatedContext(null, () => { ... })
+// yourself to get the same isolation TraceWrapper.run() provides.
 const rootStore: ContextStore = { trace: null, span: null };
 
 function currentStore(): ContextStore {
@@ -54,10 +63,18 @@ export function clearContext(): void {
  * Runs `fn` inside a fresh, isolated async-tracking context so that
  * concurrent invocations (e.g. two overlapping `startTrace(...).run(...)`
  * calls interleaving on the same event loop) never see or clobber each
- * other's current trace/span, even across `await` boundaries. Internal
- * helper consumed by `TraceWrapper.run()` (helpers.ts); it is additive and
- * does not change the signature or behavior of any existing exported
- * function above.
+ * other's current trace/span, even across `await` boundaries.
+ *
+ * `TraceWrapper.run()` (helpers.ts) calls this automatically for the
+ * `startTrace(...).run(callback)` pattern. If your code manages a trace
+ * imperatively instead -- constructing `DisseqtTrace`/`DisseqtSpan`
+ * directly and starting/ending it across separate points in your own
+ * code (e.g. HTTP middleware) rather than one wrapping callback -- call
+ * this yourself, wrapping that logical flow's entire lifetime, to get
+ * the same per-flow isolation. Without it, directly-constructed traces
+ * and spans share a single unisolated store across all concurrent
+ * flows (see `rootStore` above) -- exactly the pre-existing, not
+ * concurrency-safe behavior.
  */
 export function runInIsolatedContext<T>(initialTrace: DisseqtTrace | null, fn: () => T): T {
   return asyncLocalStorage.run({ trace: initialTrace, span: null }, fn);
