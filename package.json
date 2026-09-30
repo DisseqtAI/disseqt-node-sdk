@@ -1,6 +1,6 @@
 {
   "name": "@disseqt-ai/sdk",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Node.js SDK for Disseqt AI validation, prompt packs, and agentic tracing.",
   "license": "Proprietary",
   "author": "Disseqt AI Limited <support@disseqt.ai>",
@@ -8,6 +8,9 @@
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "bin": {
+    "disseqt": "./dist/cli/index.js"
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -40,7 +43,7 @@
     "node": ">=18.18.0"
   },
   "scripts": {
-    "build": "tsup",
+    "build": "tsup --config tsup.config.ts && tsup --config tsup.cli.config.ts",
     "clean": "rimraf dist coverage",
     "postinstall": "node scripts/compat-brace-expansion.cjs",
     "test": "vitest run",
@@ -52,7 +55,7 @@
     "smoke:all": "npm run build && node scripts/smoke-all.mjs",
     "smoke:all:live": "npm run build && DISSEQT_LIVE=1 node scripts/smoke-all.mjs --live",
     "validators:all": "tsx scripts/run-all-validators.ts",
-    "prepack": "npm run clean && npm run lint && npm run typecheck && npm run test && npm run build",
+    "prepack": "npm run clean && npm run lint && npm run typecheck && npm run build && npm run test",
     "pack:dry-run": "npm pack --dry-run"
   },
   "keywords": [
@@ -78,6 +81,7 @@
     "access": "public"
   },
   "devDependencies": {
+    "@types/js-yaml": "^4.0.9",
     "@types/node": "^22.10.2",
     "@typescript-eslint/eslint-plugin": "^8.18.1",
     "@typescript-eslint/parser": "^8.18.1",
@@ -96,5 +100,9 @@
     "brace-expansion": "5.0.8",
     "js-yaml": "^4.3.2",
     "esbuild": "^0.28.1"
+  },
+  "dependencies": {
+    "commander": "^13.1.0",
+    "js-yaml": "^4.3.2"
   }
 }

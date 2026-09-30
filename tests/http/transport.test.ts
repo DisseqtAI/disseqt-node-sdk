@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   DEFAULT_TIMEOUT_MS,
+  DisseqtApiError,
   DisseqtHttpTransport,
   DisseqtJsonError,
   buildUrl,
@@ -214,6 +215,65 @@ describe('buildUrl', () => {
   it('merges query params into existing URLs', () => {
     expect(buildUrl('https://example.test/path?existing=true', { page: 1 })).toBe(
       'https://example.test/path?existing=true&page=1',
+    );
+  });
+});
+
+describe('DisseqtHttpTransport — backend envelope', () => {
+  const make = (body: unknown) =>
+    new DisseqtHttpTransport({
+      apiKey: 'k',
+      projectId: 'p',
+      fetch: vi.fn(async () => jsonResponse(body)),
+    });
+  const envelope = (data: unknown, status = 'success') => ({
+    status,
+    data,
+    messages: [],
+    code: 'DSQ-2000',
+    standard_code: 'OK',
+    request_id: 'req_1',
+    timestamp: 't',
+  });
+
+  it('requestJson returns the unwrapped data object', async () => {
+    const t = make(envelope({ id: 'run-1', status: 'running' }));
+    const out = await t.requestJson({ method: 'GET', url: 'https://x.test/r' });
+    expect(out).toEqual({ id: 'run-1', status: 'running' });
+  });
+
+  it('requestJsonAny returns array data', async () => {
+    const t = make(envelope([{ id: 'a1' }]));
+    const out = await t.requestJsonAny({ method: 'GET', url: 'https://x.test/r' });
+    expect(out).toEqual([{ id: 'a1' }]);
+  });
+
+  it('bare objects pass through unchanged', async () => {
+    const t = make({ id: 'x', status: 'completed' });
+    expect(await t.requestJson({ method: 'GET', url: 'https://x.test/r' })).toEqual({
+      id: 'x',
+      status: 'completed',
+    });
+  });
+
+  it('status:error envelope on 2xx throws DisseqtApiError', async () => {
+    const t = make({
+      status: 'error',
+      error: { external: 'session not found', code: 'NotFound' },
+      code: 'DSQ-4040',
+      request_id: 'req_9',
+    });
+    const err = await t.requestJson({ method: 'GET', url: 'https://x.test/r' }).catch((e) => e);
+    expect(err).toBeInstanceOf(DisseqtApiError);
+    expect((err as DisseqtApiError).code).toBe('DSQ-4040');
+    expect((err as DisseqtApiError).requestId).toBe('req_9');
+    expect((err as Error).message).toContain('session not found');
+  });
+
+  it('requestJson rejects array data', async () => {
+    const t = make(envelope([1, 2]));
+    await expect(t.requestJson({ method: 'GET', url: 'https://x.test/r' })).rejects.toBeInstanceOf(
+      DisseqtJsonError,
     );
   });
 });
