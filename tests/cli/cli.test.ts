@@ -107,10 +107,36 @@ describe('disseqt CLI', () => {
     expect(JSON.parse(req?.body ?? '{}')).toEqual({ name: 't' });
   });
 
-  it('lists packs', async () => {
+  // N2: the caller's own packs by default; the marketplace behind a flag.
+  it("lists the caller's own packs by default", async () => {
     const result = await runCli(['pack', 'list', '--json']);
     expect(result.code).toBe(0);
+    expect(requests.at(-1)?.url).toBe('/api/v1/sdk/prompt-packs/my-packs');
+  });
+
+  it('lists the marketplace catalog with --marketplace', async () => {
+    const result = await runCli(['pack', 'list', '--marketplace', '--json']);
+    expect(result.code).toBe(0);
     expect(requests.at(-1)?.url).toBe('/api/v1/sdk/prompt-packs');
+  });
+
+  // N1: publish requires a sharing_scope body; the flag is case-insensitive
+  // and upper-cased on the wire.
+  it('publishes with a default and an explicit sharing scope', async () => {
+    let result = await runCli(['pack', 'publish', 'p1', '--json']);
+    expect(result.code).toBe(0);
+    expect(requests.at(-1)?.method).toBe('PATCH');
+    expect(JSON.parse(requests.at(-1)?.body ?? '{}')).toEqual({ sharing_scope: 'PRIVATE' });
+
+    result = await runCli(['pack', 'publish', 'p1', '--sharing-scope', 'organization', '--json']);
+    expect(result.code).toBe(0);
+    expect(JSON.parse(requests.at(-1)?.body ?? '{}')).toEqual({ sharing_scope: 'ORGANIZATION' });
+  });
+
+  it('exits 2 on an unknown sharing scope', async () => {
+    const result = await runCli(['pack', 'publish', 'p1', '--sharing-scope', 'team']);
+    expect(result.code).toBe(2);
+    expect(result.stderr).toContain('--sharing-scope must be one of');
   });
 
   it('creates a run against a pack', async () => {

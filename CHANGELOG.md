@@ -35,6 +35,23 @@
 
 ### Fixed
 
+- **`PacksClient.publish` sends the required `sharing_scope`.** The handler
+  binds `sharing_scope` as
+  `required,oneof=PRIVATE PROJECT ORGANIZATION PUBLIC`
+  (`api/prompt_packs_handlers.go` `publishPromptPack`), so the bodiless
+  `PATCH /:id/publish` the SDK used to send was an unconditional
+  `400 {"external":"EOF","code":"InvalidInput"}`. New signature:
+  `publish(id, sharingScope = 'PRIVATE')`, validated client-side against
+  `PACK_SHARING_SCOPES`. `unpublish` is unchanged — `unpublishPromptPack`
+  binds no body. CLI:
+  `disseqt pack publish <id> --sharing-scope private|project|organization|public`
+  (default `private`, case-insensitive, upper-cased on the wire; an unknown
+  value exits 2).
+- **`disseqt pack list` lists your own packs.** `GET /api/v1/sdk/prompt-packs`
+  is the _marketplace_ listing, so a pack you had just created came back as
+  `items: []`. The owner listing `GET /my-packs` (`getUserOwnedPacks`, on the
+  same service-key mount) is now reachable as `PacksClient.listMine(params?)`
+  and backs `disseqt pack list`; pass `--marketplace` for the public catalog.
 - **Backend envelope is unwrapped once, in the transport.** Every
   `requestJson` / `requestJsonAny` call now returns the `data` member of
   the dataset-backend's `{"status":"success","data":...}` envelope and

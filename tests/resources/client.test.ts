@@ -129,6 +129,18 @@ describe('PacksClient', () => {
     expect(lastCall(fetcher)[0]).toContain('/prompt-packs/p1/publish');
   });
 
+  // N2: GET / is the marketplace listing — a freshly created pack is not in it.
+  // The owner listing is GET /my-packs (server.go: getUserOwnedPacks).
+  it('listMine hits /my-packs', async () => {
+    const { client, fetcher } = makeClient();
+    await client.packs.listMine();
+    expect(lastCall(fetcher)[0]).toBe(
+      `${RESOURCES_DEFAULT_BASE_URL}/api/v1/sdk/prompt-packs/my-packs`,
+    );
+    await client.packs.listMine({ is_golden: true });
+    expect(lastCall(fetcher)[0]).toContain('/my-packs?is_golden=true');
+  });
+
   // G3 regression: backend registers PATCH at /sdk/prompt-packs/:id/publish; POST is a 404.
   it('publish/unpublish use PATCH', async () => {
     const { client, fetcher } = makeClient();
@@ -141,6 +153,32 @@ describe('PacksClient', () => {
     [url, init] = lastCall(fetcher);
     expect(url).toBe(`${RESOURCES_DEFAULT_BASE_URL}/api/v1/sdk/prompt-packs/p1/unpublish`);
     expect(init?.method).toBe('PATCH');
+  });
+
+  // N1: publishPromptPack binds `sharing_scope` as required; a bodiless PATCH
+  // was a hard 400 {"external":"EOF","code":"InvalidInput"} for every caller.
+  it('publish sends a required sharing_scope, defaulting to PRIVATE', async () => {
+    const { client, fetcher } = makeClient();
+    await client.packs.publish('p1');
+    expect(JSON.parse(String(lastCall(fetcher)[1]?.body))).toEqual({ sharing_scope: 'PRIVATE' });
+
+    await client.packs.publish('p1', 'ORGANIZATION');
+    expect(JSON.parse(String(lastCall(fetcher)[1]?.body))).toEqual({
+      sharing_scope: 'ORGANIZATION',
+    });
+  });
+
+  it('publish rejects a scope outside the four the handler binds', async () => {
+    const { client, fetcher } = makeClient();
+    expect(() => client.packs.publish('p1', 'TEAM' as never)).toThrow(/invalid sharing scope/);
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  // unpublishPromptPack binds no body, so none is sent.
+  it('unpublish sends no body', async () => {
+    const { client, fetcher } = makeClient();
+    await client.packs.unpublish('p1');
+    expect(lastCall(fetcher)[1]?.body).toBeUndefined();
   });
 });
 

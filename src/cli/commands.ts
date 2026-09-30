@@ -1,5 +1,6 @@
 import type { Command } from 'commander';
 
+import { PACK_SHARING_SCOPES, type PackSharingScope } from '../resources/packs.js';
 import { buildClient, emit, EXIT_USAGE, pollUntilTerminal, runAction } from './config.js';
 import { readBody } from './parse.js';
 
@@ -93,9 +94,19 @@ export function registerPack(program: Command): void {
   const cmd = program.command('pack').description('prompt packs');
 
   commonJson(
-    cmd.command('list').action(async (opts: CommonOpts) => {
-      await runAction(async () => emit(await buildClient().packs.list(), opts.json === true));
-    }),
+    cmd
+      .command('list')
+      .description('your own packs (GET /my-packs); --marketplace for the public catalog')
+      .option('--marketplace', 'list the public marketplace catalog instead', false)
+      .action(async (opts: CommonOpts & { marketplace?: boolean }) => {
+        await runAction(async () => {
+          const packs = buildClient().packs;
+          return emit(
+            await (opts.marketplace === true ? packs.list() : packs.listMine()),
+            opts.json === true,
+          );
+        });
+      }),
   );
   commonJson(
     cmd.command('get <id>').action(async (id: string, opts: CommonOpts) => {
@@ -118,9 +129,25 @@ export function registerPack(program: Command): void {
     }),
   );
   commonJson(
-    cmd.command('publish <id>').action(async (id: string, opts: CommonOpts) => {
-      await runAction(async () => emit(await buildClient().packs.publish(id), opts.json === true));
-    }),
+    cmd
+      .command('publish <id>')
+      .option(
+        '--sharing-scope <scope>',
+        `one of ${PACK_SHARING_SCOPES.join('|').toLowerCase()} (case-insensitive)`,
+        'private',
+      )
+      .action(async (id: string, opts: CommonOpts & { sharingScope: string }) => {
+        const scope = opts.sharingScope.toUpperCase() as PackSharingScope;
+        if (!PACK_SHARING_SCOPES.includes(scope)) {
+          process.stderr.write(
+            `error: --sharing-scope must be one of ${PACK_SHARING_SCOPES.join('|').toLowerCase()}\n`,
+          );
+          process.exit(EXIT_USAGE);
+        }
+        await runAction(async () =>
+          emit(await buildClient().packs.publish(id, scope), opts.json === true),
+        );
+      }),
   );
   commonJson(
     cmd.command('unpublish <id>').action(async (id: string, opts: CommonOpts) => {

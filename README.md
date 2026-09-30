@@ -21,6 +21,9 @@ The official **Node.js / TypeScript SDK** for the [Disseqt AI](https://disseqt.a
   - [Agentic Tracing](#agentic-tracing)
   - [Prompt Packs](#prompt-packs)
 - [CLI](#cli)
+  - [`disseqt redteam`](#disseqt-redteam)
+  - [`disseqt scan`](#disseqt-scan)
+  - [`disseqt pack`](#disseqt-pack)
 - [Configuration](#configuration)
 - [Available Validators](#available-validators)
 - [Request Models](#request-models)
@@ -298,6 +301,21 @@ debug-access, intellectual-property. Exits 1 when findings remain (unless
 batch failed; stops after the first 401/402/403. Judge failures that ride an
 HTTP 200 (`status.code != "200"`, e.g. 402 insufficient credits) count as
 failed batches, never as findings.
+
+### `disseqt pack`
+
+```bash
+disseqt pack list                                  # GET /my-packs — packs you own
+disseqt pack list --marketplace                    # GET / — the public marketplace catalog
+disseqt pack publish <id> --sharing-scope project  # private (default) | project | organization | public
+disseqt pack unpublish <id>
+```
+
+`pack list` defaults to the **owner** listing: the base
+`GET /api/v1/sdk/prompt-packs` is the marketplace catalog, so a pack you just
+created is not in it. `--sharing-scope` is case-insensitive and upper-cased on
+the wire; `publishPromptPack` binds it as required, and non-admin packs are
+rejected server-side for `public`.
 
 ---
 

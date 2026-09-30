@@ -1,3 +1,4 @@
+import { DisseqtError } from '../http/errors.js';
 import type { JsonObject, JsonValue, QueryParams } from '../http/types.js';
 import { ResourceBase } from './base.js';
 
@@ -5,10 +6,24 @@ import { ResourceBase } from './base.js';
 // the browser-session mount and rejects API-key callers (ErrAuthHeaderRequired).
 const ROOT = '/api/v1/sdk/prompt-packs';
 
+/** publishPromptPack binds `oneof=PRIVATE PROJECT ORGANIZATION PUBLIC`. */
+export const PACK_SHARING_SCOPES = ['PRIVATE', 'PROJECT', 'ORGANIZATION', 'PUBLIC'] as const;
+
+export type PackSharingScope = (typeof PACK_SHARING_SCOPES)[number];
+
 /** Prompt-pack CRUD + related actions (publish, duplicate, download, etc). */
 export class PacksClient extends ResourceBase {
+  /**
+   * GET / — the **marketplace** catalog (published packs visible to the
+   * caller). A pack you just created is not in here; use {@link listMine}.
+   */
   list(params?: QueryParams): Promise<JsonObject> {
     return this._request('GET', ROOT, params ? { params } : {});
+  }
+
+  /** GET /my-packs — packs owned by the calling user (getUserOwnedPacks). */
+  listMine(params?: QueryParams): Promise<JsonObject> {
+    return this._request('GET', `${ROOT}/my-packs`, params ? { params } : {});
   }
 
   get(id: string): Promise<JsonObject> {
@@ -35,12 +50,23 @@ export class PacksClient extends ResourceBase {
     );
   }
 
-  /** PATCH /:id/publish (server.go sdkPromptPackRoutes). */
-  publish(id: string): Promise<JsonObject> {
-    return this._request('PATCH', `${ROOT}/${id}/publish`);
+  /**
+   * PATCH /:id/publish. `sharing_scope` is a **required** body field
+   * (publishPromptPack binds it); omitting the body is a 400 `EOF`.
+   * Non-admin packs are additionally rejected server-side for `PUBLIC`.
+   */
+  publish(id: string, sharingScope: PackSharingScope = 'PRIVATE'): Promise<JsonObject> {
+    if (!PACK_SHARING_SCOPES.includes(sharingScope)) {
+      throw new DisseqtError(
+        `invalid sharing scope ${JSON.stringify(sharingScope)}; expected one of ${PACK_SHARING_SCOPES.join(', ')}`,
+      );
+    }
+    return this._request('PATCH', `${ROOT}/${id}/publish`, {
+      json: { sharing_scope: sharingScope },
+    });
   }
 
-  /** PATCH /:id/unpublish. */
+  /** PATCH /:id/unpublish — no body (unpublishPromptPack binds none). */
   unpublish(id: string): Promise<JsonObject> {
     return this._request('PATCH', `${ROOT}/${id}/unpublish`);
   }
