@@ -116,6 +116,9 @@ export function registerPack(program: Command): void {
   commonJson(
     cmd
       .command('create')
+      .description(
+        'create a pack (severity/interaction_mode/task_type in the body are ignored — the backend aggregates them from the prompts)',
+      )
       .requiredOption('--body <json|file|->', 'request body')
       .action(async (opts: CommonOpts & { body: string }) => {
         await runAction(async () =>

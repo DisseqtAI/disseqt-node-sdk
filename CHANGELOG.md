@@ -47,6 +47,11 @@
   `disseqt pack publish <id> --sharing-scope private|project|organization|public`
   (default `private`, case-insensitive, upper-cased on the wire; an unknown
   value exits 2).
+- **Documented that pack-level `severity`, `interaction_mode` and `task_type`
+  are ignored on create/update.** `createPromptPack` / `updatePromptPack` blank
+  all three and re-derive them by aggregating the pack's prompts, so they never
+  round-trip; the JSDoc on `PacksClient.create` / `update` and the
+  `disseqt pack create` help now say so. Set them on the prompts instead.
 - **`disseqt pack list` lists your own packs.** `GET /api/v1/sdk/prompt-packs`
   is the _marketplace_ listing, so a pack you had just created came back as
   `items: []`. The owner listing `GET /my-packs` (`getUserOwnedPacks`, on the

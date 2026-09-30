@@ -30,10 +30,17 @@ export class PacksClient extends ResourceBase {
     return this._request('GET', `${ROOT}/${id}`);
   }
 
+  /**
+   * `severity`, `interaction_mode` and `task_type` are ignored server-side.
+   * createPromptPack blanks all three (after a warning log) and re-derives
+   * them by aggregating the pack's prompts, so they never round-trip — set
+   * them on the prompts instead of the pack.
+   */
   create(payload: JsonValue): Promise<JsonObject> {
     return this._request('POST', ROOT, { json: payload });
   }
 
+  /** Same aggregated-field caveat as {@link create}. */
   update(id: string, payload: JsonValue): Promise<JsonObject> {
     return this._request('PATCH', `${ROOT}/${id}`, { json: payload });
   }
