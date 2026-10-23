@@ -71,6 +71,22 @@ export const TERMINAL_STATUSES: ReadonlySet<string> = new Set([
   'done',
 ]);
 
+const nested = (res: Record<string, unknown>, key: string): unknown => {
+  const v = res[key];
+  return v !== null && typeof v === 'object' ? (v as Record<string, unknown>)['status'] : undefined;
+};
+
+/** Lower-cased status from top level, MR `{job}`, pack-run `{run}` or plan-run `{header}`. */
+export function statusOf(res: Record<string, unknown>): string {
+  const s =
+    res['status'] ??
+    res['state'] ??
+    nested(res, 'job') ??
+    nested(res, 'run') ??
+    nested(res, 'header');
+  return String(s ?? '').toLowerCase();
+}
+
 export interface PollOptions {
   intervalMs?: number;
   timeoutMs?: number;
@@ -101,9 +117,7 @@ export async function pollUntilTerminal<T extends Record<string, unknown>>(
     for (;;) {
       const res = await Promise.race([getStatus(), interrupted]);
       if (res === 'interrupted') return await giveUp('interrupted (Ctrl-C)', options);
-      // MR jobs nest it: GET /mr-jailbreak/jobs/:id -> {job: {status}, interactions}.
-      const job = res['job'] as Record<string, unknown> | undefined;
-      status = String(res['status'] ?? res['state'] ?? job?.['status'] ?? '').toLowerCase();
+      status = statusOf(res);
       if (TERMINAL_STATUSES.has(status)) return res;
       if (Date.now() >= deadline) {
         const why = `did not finish within ${timeoutMs / 1000}s (last status: "${status || '?'}")`;

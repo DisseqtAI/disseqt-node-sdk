@@ -24,12 +24,18 @@ const INT = '22222222-2222-4222-8222-222222222222';
 
 // Route → response body. Non-matching paths get `{id, status: completed}`.
 const responseMap: Record<string, unknown> = {
-  '/api/v1/testing/attack-techniques': [{ id: 'jb-1', name: 'JailbreakLike' }],
-  '/api/v1/mr-jailbreak/techniques': [{ id: 'mt-1', name: 'MultiTurnLike' }],
-  '/api/v1/mr-jailbreak/agents': [
-    { id: 'a1', attack_type: 'jailbreak' },
-    { id: 'a2', attack_type: 'toxicity' },
-  ],
+  // Real list shapes: {items, pagination} / {techniques, total_count} / {agents, total_count}.
+  '/api/v1/testing/attack-techniques': { items: [{ id: 'jb-1', name: 'JailbreakLike' }] },
+  '/api/v1/mr-jailbreak/techniques': { techniques: [{ id: 'mt-1' }], total_count: 1 },
+  '/api/v1/mr-jailbreak/agents': {
+    agents: [{ id: 'a1', attack_type: 'jailbreak' }],
+    total_count: 1,
+  },
+  // PromptPackOutputValidationResponse (api/prompt_pack_evaluations_handlers.go).
+  '/api/v1/sdk/prompt-packs/runs/r9/validate-outputs': {
+    output_validation_run_id: 'ov-1',
+    status: 'pending',
+  },
   '/api/v1/mr-jailbreak/batch-automate': {
     total_target_prompts: 2,
     successful_jobs: 2,
@@ -174,8 +180,8 @@ describe('disseqt redteam CLI', () => {
     const result = await runCli(['redteam', 'list-attacks']);
     expect(result.code).toBe(0);
     const seen = requests.slice(before).map((r) => r.url);
-    expect(seen).toContain('/api/v1/testing/attack-techniques');
-    expect(seen).toContain('/api/v1/mr-jailbreak/techniques');
+    expect(seen).toContain('/api/v1/testing/attack-techniques?page=1&page-size=100');
+    expect(seen).toContain('/api/v1/mr-jailbreak/techniques?page_id=1&page-size=100');
     expect(seen).toContain('/api/v1/mr-jailbreak/agents?page_id=1&page-size=100');
     const parsed: unknown = JSON.parse(result.stdout);
     expect(parsed).toHaveProperty('single_turn');
@@ -188,19 +194,61 @@ describe('disseqt redteam CLI', () => {
     const result = await runCli(['redteam', 'list-attacks', '--kind', 'single']);
     expect(result.code).toBe(0);
     const seen = requests.slice(before).map((r) => r.url);
-    expect(seen).toEqual(['/api/v1/testing/attack-techniques']);
+    expect(seen).toEqual(['/api/v1/testing/attack-techniques?page=1&page-size=100']);
   });
 
-  it('list-personas filters by attack_type client-side', async () => {
+  it('list-personas forwards attack_type and prints the server payload', async () => {
     const result = await runCli(['redteam', 'list-personas', '--attack-type', 'jailbreak']);
     expect(result.code).toBe(0);
     expect(requests.at(-1)?.url).toBe(
       '/api/v1/mr-jailbreak/agents?page_id=1&page-size=100&attack_type=jailbreak',
     );
-    const parsed = JSON.parse(result.stdout) as { attack_type?: string }[];
-    expect(Array.isArray(parsed)).toBe(true);
-    expect(parsed).toHaveLength(1);
-    expect(parsed[0]?.attack_type).toBe('jailbreak');
+    expect(JSON.parse(result.stdout)).toEqual({
+      agents: [{ id: 'a1', attack_type: 'jailbreak' }],
+      total_count: 1,
+    });
+  });
+
+  it('technique lists ask for the max page size (server default is 20)', async () => {
+    const before = requests.length;
+    expect((await runCli(['redteam', 'list-techniques'])).code).toBe(0);
+    const seen = requests.slice(before).map((r) => r.url);
+    expect(seen).toContain('/api/v1/testing/attack-techniques?page=1&page-size=100');
+    expect(seen).toContain('/api/v1/mr-jailbreak/techniques?page_id=1&page-size=100');
+  });
+
+  it('validation create --wait polls the output_validation_run_id', async () => {
+    const before = requests.length;
+    const result = await runCli(['validation', 'create', 'r9', '--body', '{}', '--wait', '--json']);
+    expect(result.code).toBe(0);
+    const seen = requests.slice(before).map((r) => r.url);
+    expect(seen).toContain('/api/v1/sdk/prompt-packs/output-validations/ov-1');
+  });
+
+  it('multi-turn without a project id resolves it via whoami, else fails clearly', async () => {
+    const before = requests.length;
+    const result = await runCli(
+      [
+        'redteam',
+        'attack',
+        '--multi-turn',
+        '--technique',
+        't1',
+        '--prompt',
+        'o',
+        '--integration',
+        INT,
+        '--poll-interval',
+        '0.01',
+      ],
+      { DISSEQT_PROJECT_ID: '' },
+    );
+    const seen = requests.slice(before).map((r) => r.url);
+    expect(seen[0]).toBe('/api/v1/whoami');
+    // The mock whoami has no project_id, so no batch is sent.
+    expect(seen).not.toContain('/api/v1/mr-jailbreak/batch-automate');
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain('project id');
   });
 
   it('list-techniques --single-turn hits only single-turn', async () => {
@@ -208,7 +256,7 @@ describe('disseqt redteam CLI', () => {
     const result = await runCli(['redteam', 'list-techniques', '--single-turn']);
     expect(result.code).toBe(0);
     const seen = requests.slice(before).map((r) => r.url);
-    expect(seen).toEqual(['/api/v1/testing/attack-techniques']);
+    expect(seen).toEqual(['/api/v1/testing/attack-techniques?page=1&page-size=100']);
   });
 
   it('list-techniques with both flags exits 2', async () => {

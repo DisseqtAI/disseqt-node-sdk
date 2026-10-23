@@ -107,17 +107,21 @@ export type ReportFormat = 'json' | 'csv' | 'markdown';
 export class RedteamClient extends ResourceBase {
   // --- Catalog ---
 
-  /** GET /api/v1/testing/attack-techniques — array response. */
-  listSingleTurnTechniques(): Promise<unknown> {
-    return this._requestAny('GET', `${TESTING}/attack-techniques`);
+  /** GET /testing/attack-techniques → `{items, pagination}`; server default page size is 20. */
+  listSingleTurnTechniques(params?: QueryParams): Promise<unknown> {
+    return this._requestAny('GET', `${TESTING}/attack-techniques`, {
+      params: { page: 1, 'page-size': 100, ...params },
+    });
   }
 
-  /** GET /api/v1/mr-jailbreak/techniques — array response. */
-  listMultiTurnTechniques(): Promise<unknown> {
-    return this._requestAny('GET', `${MR}/techniques`);
+  /** GET /mr-jailbreak/techniques → `{techniques, total_count}`; server default page size is 20. */
+  listMultiTurnTechniques(params?: QueryParams): Promise<unknown> {
+    return this._requestAny('GET', `${MR}/techniques`, {
+      params: { page_id: 1, 'page-size': 100, ...params },
+    });
   }
 
-  /** GET /mr-jailbreak/agents; `page_id` and kebab-case `page-size` (5..100) are required
+  /** GET /mr-jailbreak/agents → `{agents, total_count}`; `page_id` and kebab-case `page-size` (5..100) are required
    *  (ListJailbreakAgentsRequest), so default to the first full page. */
   listAgents(params?: QueryParams): Promise<unknown> {
     return this._requestAny('GET', `${MR}/agents`, {

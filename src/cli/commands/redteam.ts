@@ -334,19 +334,13 @@ export function registerRedteam(program: Command): void {
     .option('--attack-type <type>', 'filter personas by attack_type field if present')
     .action(async (opts: { attackType?: string }) => {
       await runAction(async () => {
-        const payload: unknown = await rt().listAgents(
-          opts.attackType !== undefined ? { attack_type: opts.attackType } : undefined,
+        // The server filters by attack_type.
+        emit(
+          await rt().listAgents(
+            opts.attackType !== undefined ? { attack_type: opts.attackType } : undefined,
+          ),
+          true,
         );
-        let out: unknown = payload;
-        if (opts.attackType !== undefined && Array.isArray(payload)) {
-          out = payload.filter(
-            (p) =>
-              p !== null &&
-              typeof p === 'object' &&
-              (p as Record<string, unknown>)['attack_type'] === opts.attackType,
-          );
-        }
-        emit(out, true);
       });
     });
 
@@ -417,9 +411,15 @@ export function registerRedteam(program: Command): void {
           const appName = opts.appName ?? (typeof tplName === 'string' ? tplName : opts.name);
           await runAction(async () => {
             const client = buildClient();
-            const projectId = client.transport.projectId;
+            // JailbreakJobConfig.project_id is `binding:"required"`; derive it from the key if unset.
+            const projectId = client.transport.projectId ?? (await client.whoami()).project_id;
+            if (projectId === null) {
+              throw new Error(
+                'multi-turn needs a project id: set DISSEQT_PROJECT_ID or `disseqt login --project-id`',
+              );
+            }
             const picked = multiTurnTarget(target, {
-              ...(projectId !== undefined ? { project_id: projectId } : {}),
+              project_id: projectId,
               job_name_prefix: opts.name,
               app_name: appName,
               app_description_short: opts.appDescription ?? `${appName} (disseqt CLI)`,

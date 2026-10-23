@@ -32,14 +32,18 @@ describe('RedteamClient — catalog', () => {
   it('lists single-turn techniques', async () => {
     const { client, fetcher } = makeClient();
     await client.redteam.listSingleTurnTechniques();
-    expect(lastCall(fetcher)[0]).toBe(`${BASE}/api/v1/testing/attack-techniques`);
+    expect(lastCall(fetcher)[0]).toBe(
+      `${BASE}/api/v1/testing/attack-techniques?page=1&page-size=100`,
+    );
     expect(lastCall(fetcher)[1]?.method).toBe('GET');
   });
 
   it('lists multi-turn techniques', async () => {
     const { client, fetcher } = makeClient();
     await client.redteam.listMultiTurnTechniques();
-    expect(lastCall(fetcher)[0]).toBe(`${BASE}/api/v1/mr-jailbreak/techniques`);
+    expect(lastCall(fetcher)[0]).toBe(
+      `${BASE}/api/v1/mr-jailbreak/techniques?page_id=1&page-size=100`,
+    );
   });
 
   // Backend requires page_id + kebab-case page-size (jailbreak_agents_handlers.go:52-54).
@@ -57,8 +61,8 @@ describe('RedteamClient — catalog', () => {
     const { client, fetcher } = makeClient();
     await client.redteam.listAttacks('all');
     const urls = fetcher.mock.calls.map((c) => String(c[0]));
-    expect(urls).toContain(`${BASE}/api/v1/testing/attack-techniques`);
-    expect(urls).toContain(`${BASE}/api/v1/mr-jailbreak/techniques`);
+    expect(urls).toContain(`${BASE}/api/v1/testing/attack-techniques?page=1&page-size=100`);
+    expect(urls).toContain(`${BASE}/api/v1/mr-jailbreak/techniques?page_id=1&page-size=100`);
     expect(urls).toContain(`${BASE}/api/v1/mr-jailbreak/agents?page_id=1&page-size=100`);
   });
 
@@ -66,7 +70,9 @@ describe('RedteamClient — catalog', () => {
     const { client, fetcher } = makeClient();
     await client.redteam.listAttacks('single');
     expect(fetcher.mock.calls).toHaveLength(1);
-    expect(lastCall(fetcher)[0]).toBe(`${BASE}/api/v1/testing/attack-techniques`);
+    expect(lastCall(fetcher)[0]).toBe(
+      `${BASE}/api/v1/testing/attack-techniques?page=1&page-size=100`,
+    );
   });
 
   it('list-attacks kind=agents hits only agents', async () => {

@@ -290,7 +290,7 @@ export function registerValidation(program: Command): void {
               emit(created, opts.json === true);
               return;
             }
-            const id = String(created['id'] ?? '');
+            const id = String(created['output_validation_run_id'] ?? created['id'] ?? '');
             if (id.length === 0) {
               emit(created, opts.json === true);
               return;
