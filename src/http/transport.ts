@@ -20,17 +20,17 @@ export interface DisseqtHttpTransportConfig extends DisseqtAuthConfig {
 
 export class DisseqtHttpTransport {
   readonly apiKey: string;
-  readonly projectId: string;
+  readonly projectId: string | undefined;
   readonly timeoutMs: number;
 
   private readonly fetcher: FetchLike;
 
   constructor(config: DisseqtHttpTransportConfig) {
     assertNonEmpty('apiKey', config.apiKey);
-    assertNonEmpty('projectId', config.projectId);
+    const projectId = config.projectId?.trim();
 
     this.apiKey = config.apiKey;
-    this.projectId = config.projectId;
+    this.projectId = projectId === undefined || projectId.length === 0 ? undefined : projectId;
     this.timeoutMs = config.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     this.fetcher = config.fetch ?? globalThis.fetch.bind(globalThis);
   }
@@ -39,7 +39,7 @@ export class DisseqtHttpTransport {
     const includeContentType = options.includeContentType ?? true;
     const headers: Record<string, string> = {
       'X-API-Key': this.apiKey,
-      'X-Project-Id': this.projectId,
+      ...(this.projectId !== undefined ? { 'X-Project-Id': this.projectId } : {}),
       ...sdkIdentityHeaders(),
     };
 
@@ -51,10 +51,8 @@ export class DisseqtHttpTransport {
   }
 
   /**
-   * Strict JSON path: the backend's `{status:"success",data}` envelope is
-   * unwrapped to `data`, which must be an object. A `{status:"error"}`
-   * envelope throws {@link DisseqtApiError}. Bare (non-envelope) objects
-   * pass through unchanged.
+   * Strict JSON path: the body must be an object. With `unwrapEnvelope`, a
+   * `{status:"success",data}` envelope becomes `data` and `{status:"error"}` throws {@link DisseqtApiError}.
    */
   async requestJson<TResponse extends JsonObject = JsonObject>(
     options: DisseqtRequestOptions,
@@ -69,7 +67,8 @@ export class DisseqtHttpTransport {
       throw new DisseqtJsonError('Server returned null/empty JSON response', response.text);
     }
 
-    const data = unwrapEnvelope(parseJson(response.text), response.text);
+    const parsed = parseJson(response.text);
+    const data = options.unwrapEnvelope === true ? unwrapEnvelope(parsed, response.text) : parsed;
     if (data === null) {
       throw new DisseqtJsonError('Server returned null/empty JSON response', response.text);
     }
@@ -79,16 +78,13 @@ export class DisseqtHttpTransport {
     return data as TResponse;
   }
 
-  /**
-   * Parse arbitrary JSON (objects, arrays, primitives) with the same
-   * envelope unwrapping as `requestJson`. Used by resource clients that hit
-   * endpoints whose `data` is an array, e.g. `/mr-jailbreak/agents`.
-   */
+  /** Parse arbitrary JSON (arrays included); honours `unwrapEnvelope` like `requestJson`. */
   async requestJsonAny(options: DisseqtRequestOptions): Promise<unknown> {
     const response = await this.requestRaw(options);
     if (response.status === 204) return null;
     if (response.text.length === 0) return null;
-    return unwrapEnvelope(parseJson(response.text), response.text);
+    const parsed = parseJson(response.text);
+    return options.unwrapEnvelope === true ? unwrapEnvelope(parsed, response.text) : parsed;
   }
 
   async requestRaw(options: DisseqtRequestOptions): Promise<RawResponse> {

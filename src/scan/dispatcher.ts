@@ -432,6 +432,7 @@ export function makeDefaultTransport(
       method,
       url: `${trimmedBase}${path}`,
       json: body as Record<string, unknown>,
+      unwrapEnvelope: true,
     });
   };
 }

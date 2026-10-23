@@ -219,13 +219,38 @@ describe('buildUrl', () => {
   });
 });
 
-describe('DisseqtHttpTransport — backend envelope', () => {
-  const make = (body: unknown) =>
-    new DisseqtHttpTransport({
+describe('DisseqtHttpTransport — envelope is opt-in', () => {
+  it('requestJson returns the raw {status,data} envelope by default (pre-0.4 behaviour)', async () => {
+    const body = { status: 'success', data: { id: 'r' } };
+    const t = new DisseqtHttpTransport({
       apiKey: 'k',
       projectId: 'p',
       fetch: vi.fn(async () => jsonResponse(body)),
     });
+    expect(await t.requestJson({ method: 'GET', url: 'https://x.test/r' })).toEqual(body);
+  });
+
+  it('omits X-Project-Id when no project id is configured', () => {
+    const t = new DisseqtHttpTransport({ apiKey: 'k' });
+    expect(t.projectId).toBeUndefined();
+    expect(t.buildHeaders()).not.toHaveProperty('X-Project-Id');
+  });
+});
+
+describe('DisseqtHttpTransport — backend envelope (unwrapEnvelope: true)', () => {
+  const make = (body: unknown) => {
+    const inner = new DisseqtHttpTransport({
+      apiKey: 'k',
+      projectId: 'p',
+      fetch: vi.fn(async () => jsonResponse(body)),
+    });
+    return {
+      requestJson: (o: Parameters<typeof inner.requestJson>[0]) =>
+        inner.requestJson({ ...o, unwrapEnvelope: true }),
+      requestJsonAny: (o: Parameters<typeof inner.requestJsonAny>[0]) =>
+        inner.requestJsonAny({ ...o, unwrapEnvelope: true }),
+    };
+  };
   const envelope = (data: unknown, status = 'success') => ({
     status,
     data,

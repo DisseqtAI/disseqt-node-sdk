@@ -37,11 +37,8 @@ export class ResourceBase {
     this.baseUrl = stripTrailingSlashes(config.baseUrl ?? RESOURCES_DEFAULT_BASE_URL);
     const timeoutMs =
       config.timeoutMs ?? (config.timeout === undefined ? 30_000 : config.timeout * 1000);
-    const transportConfig: DisseqtHttpTransportConfig = {
-      apiKey: config.apiKey,
-      projectId: config.projectId,
-      timeoutMs,
-    };
+    const transportConfig: DisseqtHttpTransportConfig = { apiKey: config.apiKey, timeoutMs };
+    if (config.projectId !== undefined) transportConfig.projectId = config.projectId;
     if (config.fetch !== undefined) {
       transportConfig.fetch = config.fetch;
     }
@@ -57,7 +54,7 @@ export class ResourceBase {
     path: string,
     options: { json?: JsonValue; params?: QueryParams } = {},
   ): Promise<T> {
-    const req: DisseqtRequestOptions = { method, url: this._url(path) };
+    const req: DisseqtRequestOptions = { method, url: this._url(path), unwrapEnvelope: true };
     if (options.json !== undefined) req.json = options.json;
     if (options.params !== undefined) req.params = options.params;
     return this.transport.requestJson<T>(req);
@@ -87,7 +84,7 @@ export class ResourceBase {
     path: string,
     options: { json?: JsonValue; params?: QueryParams } = {},
   ): Promise<unknown> {
-    const req: DisseqtRequestOptions = { method, url: this._url(path) };
+    const req: DisseqtRequestOptions = { method, url: this._url(path), unwrapEnvelope: true };
     if (options.json !== undefined) req.json = options.json;
     if (options.params !== undefined) req.params = options.params;
     return this.transport.requestJsonAny(req);

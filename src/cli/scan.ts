@@ -102,7 +102,7 @@ function buildTransport(): { transport: ScanTransport; baseUrl: string; scope: S
   return {
     transport: makeDefaultTransport(http, baseUrl),
     baseUrl,
-    scope: { projectId: http.projectId, organizationId: organizationId.trim() },
+    scope: { projectId: projectId.trim(), organizationId: organizationId.trim() },
   };
 }
 
