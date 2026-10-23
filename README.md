@@ -56,6 +56,10 @@ Shared traits:
 
 ---
 
+## Red-teaming
+
+Attack your AI System from the `disseqt` CLI or code with only an API key: see [docs/redteaming.md](docs/redteaming.md).
+
 ## Installation
 
 ```bash
