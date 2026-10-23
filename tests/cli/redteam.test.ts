@@ -925,3 +925,59 @@ describe('disseqt app', () => {
     ]);
   });
 });
+
+describe('polling interrupts', () => {
+  const RUN = '/api/v1/testing/runs/test-id';
+  const attack = [
+    'redteam',
+    'attack',
+    '--single-turn',
+    '--technique',
+    't1',
+    '--app',
+    APP,
+    '--pack',
+    'p1',
+    '--validator',
+    'v1',
+    '--poll-interval',
+    '0.02',
+  ];
+  const cancelled = (before: number): boolean =>
+    requests.slice(before).some((r) => r.method === 'POST' && r.url === `${RUN}/cancel`);
+
+  it('a --max-wait timeout cancels the run, prints a hint and exits 1', async () => {
+    responseMap[RUN] = { id: 'test-id', status: 'running' };
+    const before = requests.length;
+    const result = await runCli([...attack, '--max-wait', '0.1']);
+    Reflect.deleteProperty(responseMap, RUN);
+    expect(result.code).toBe(1);
+    expect(cancelled(before)).toBe(true);
+    expect(result.stderr).toContain('cancelled test-id');
+    expect(result.stderr).toContain('disseqt redteam status test-id');
+  });
+
+  it('Ctrl-C (SIGINT) while polling cancels the run and exits 1', async () => {
+    responseMap[RUN] = { id: 'test-id', status: 'running' };
+    const before = requests.length;
+    const child = spawn(process.execPath, [CLI, ...attack, '--max-wait', '30'], {
+      env: { ...process.env, DISSEQT_API_KEY: 'k', DISSEQT_PROJECT_ID: 'p', DISSEQT_BASE_URL: baseUrl },
+    });
+    let stderr = '';
+    child.stderr.on('data', (c: Buffer) => (stderr += c.toString('utf-8')));
+    const code = await new Promise<number | null>((resolve) => {
+      const timer = globalThis.setInterval(() => {
+        if (requests.slice(before).some((r) => r.url === RUN)) {
+          globalThis.clearInterval(timer);
+          child.kill('SIGINT');
+        }
+      }, 10);
+      child.on('close', (c) => resolve(c));
+    });
+    Reflect.deleteProperty(responseMap, RUN);
+    expect(code).toBe(1);
+    expect(cancelled(before)).toBe(true);
+    expect(stderr).toContain('interrupted');
+    expect(stderr).toContain('disseqt redteam status test-id');
+  });
+});

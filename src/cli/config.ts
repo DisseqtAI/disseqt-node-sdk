@@ -71,26 +71,68 @@ export const TERMINAL_STATUSES: ReadonlySet<string> = new Set([
   'done',
 ]);
 
+export interface PollOptions {
+  intervalMs?: number;
+  timeoutMs?: number;
+  /** Id shown in the hint. */
+  id?: string;
+  /** Called on timeout or Ctrl-C before giving up (e.g. cancel the run). */
+  cancel?: () => Promise<unknown>;
+  /** Command that inspects the job later, e.g. `disseqt redteam status <id>`. */
+  statusCommand?: string;
+}
+
 /**
- * Poll `getStatus` (unwrapped `data`) until `status`/`state` is terminal; throws at the deadline.
+ * Poll `getStatus` (unwrapped `data`) until `status`/`state` is terminal. On deadline or
+ * SIGINT it calls `cancel`, prints a hint, and throws (exit 1 via `runAction`).
  * ponytail: constant interval; exp backoff if runs routinely miss the ceiling.
  */
 export async function pollUntilTerminal<T extends Record<string, unknown>>(
   getStatus: () => Promise<T>,
-  options: { intervalMs?: number; timeoutMs?: number } = {},
+  options: PollOptions = {},
 ): Promise<T> {
   const interval = options.intervalMs ?? 3000;
   const timeoutMs = options.timeoutMs ?? 15 * 60 * 1000;
   const deadline = Date.now() + timeoutMs;
-  for (;;) {
-    const res = await getStatus();
-    const status = String(res['status'] ?? res['state'] ?? '').toLowerCase();
-    if (TERMINAL_STATUSES.has(status)) return res;
-    if (Date.now() >= deadline) {
-      throw new Error(
-        `did not finish within ${timeoutMs / 1000}s (last status: "${status || '?'}")`,
-      );
+  let onSigint = (): void => undefined;
+  const interrupted = new Promise<'interrupted'>((resolve) => {
+    onSigint = () => resolve('interrupted');
+  });
+  process.once('SIGINT', onSigint);
+  let status = '';
+  try {
+    for (;;) {
+      const res = await Promise.race([getStatus(), interrupted]);
+      if (res === 'interrupted') return await giveUp('interrupted (Ctrl-C)', options);
+      status = String(res['status'] ?? res['state'] ?? '').toLowerCase();
+      if (TERMINAL_STATUSES.has(status)) return res;
+      if (Date.now() >= deadline) {
+        const why = `did not finish within ${timeoutMs / 1000}s (last status: "${status || '?'}")`;
+        return await giveUp(why, options);
+      }
+      const slept = await Promise.race([
+        new Promise<'slept'>((r) => setTimeout(() => r('slept'), interval)),
+        interrupted,
+      ]);
+      if (slept === 'interrupted') return await giveUp('interrupted (Ctrl-C)', options);
     }
-    await new Promise((r) => setTimeout(r, interval));
+  } finally {
+    process.removeListener('SIGINT', onSigint);
   }
+}
+
+async function giveUp(reason: string, options: PollOptions): Promise<never> {
+  const id = options.id ?? 'job';
+  let outcome = `${id} is still running`;
+  if (options.cancel !== undefined) {
+    try {
+      await options.cancel();
+      outcome = `cancelled ${id}`;
+    } catch (error) {
+      outcome = `cancel of ${id} failed: ${error instanceof Error ? error.message : String(error)}`;
+    }
+  }
+  const hint =
+    options.statusCommand !== undefined ? `; inspect with \`${options.statusCommand}\`` : '';
+  throw new Error(`${reason}; ${outcome}${hint}`);
 }

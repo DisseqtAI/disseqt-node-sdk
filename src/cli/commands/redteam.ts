@@ -442,9 +442,12 @@ export function registerRedteam(program: Command): void {
               const jobId = resolveId(row, 'job_id');
               if (jobId === null) continue;
               jobs.push(
+                // No mr-jailbreak cancel route exists, so a timeout only prints the hint.
                 await pollUntilTerminal(() => client.redteam.getMrJob(jobId), {
                   intervalMs: pollMs,
                   timeoutMs: maxMs,
+                  id: jobId,
+                  statusCommand: `disseqt redteam status ${jobId}`,
                 }),
               );
             }
@@ -486,6 +489,9 @@ export function registerRedteam(program: Command): void {
           const final = await pollUntilTerminal(() => client.getRun(runId), {
             intervalMs: pollMs,
             timeoutMs: maxMs,
+            id: runId,
+            cancel: () => client.cancelRun(runId),
+            statusCommand: `disseqt redteam status ${runId}`,
           });
           const results = await client.getRunResults(runId);
           emit({ status: final, results }, true);

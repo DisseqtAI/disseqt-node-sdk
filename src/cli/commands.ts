@@ -225,7 +225,11 @@ export function registerRun(program: Command): void {
         if (runId.length === 0) {
           throw new Error(`could not resolve run id from response: ${JSON.stringify(created)}`);
         }
-        const final = await pollUntilTerminal(() => c.runs.get(runId));
+        const final = await pollUntilTerminal(() => c.runs.get(runId), {
+          id: runId,
+          cancel: () => c.runs.cancel(runId),
+          statusCommand: `disseqt run get ${runId}`,
+        });
         emit(final, opts.json === true);
       });
     });
@@ -253,7 +257,11 @@ export function registerRun(program: Command): void {
       .action(async (runId: string, opts: CommonOpts) => {
         await runAction(async () => {
           const c = buildClient();
-          const final = await pollUntilTerminal(() => c.runs.get(runId));
+          // Watching only observes: no cancel on Ctrl-C/timeout.
+          const final = await pollUntilTerminal(() => c.runs.get(runId), {
+            id: runId,
+            statusCommand: `disseqt run get ${runId}`,
+          });
           emit(final, opts.json === true);
         });
       }),
@@ -287,7 +295,12 @@ export function registerValidation(program: Command): void {
               emit(created, opts.json === true);
               return;
             }
-            emit(await pollUntilTerminal(() => c.validations.get(id)), opts.json === true);
+            const final = await pollUntilTerminal(() => c.validations.get(id), {
+              id,
+              cancel: () => c.validations.cancel(id),
+              statusCommand: `disseqt validation get ${id}`,
+            });
+            emit(final, opts.json === true);
           });
         }),
     ),
@@ -693,7 +706,11 @@ export function registerPlanRun(program: Command): void {
         if (runId.length === 0) {
           throw new Error(`could not resolve run id from response: ${JSON.stringify(created)}`);
         }
-        const final = await pollUntilTerminal(() => c.planRuns.get(runId));
+        const final = await pollUntilTerminal(() => c.planRuns.get(runId), {
+          id: runId,
+          cancel: () => c.planRuns.cancel(runId),
+          statusCommand: `disseqt plan-run get ${runId}`,
+        });
         emit(final, opts.json === true);
       });
     });
