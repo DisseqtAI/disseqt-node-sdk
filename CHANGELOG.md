@@ -2,6 +2,61 @@
 
 ## Unreleased
 
+### Breaking
+
+- `projectId` is now `string | undefined` on `DisseqtHttpTransport`, `Client`,
+  `DisseqtAPIClient` and `DisseqtAuthConfig` (types only): the API key alone
+  identifies the project, and `X-Project-Id` is sent only when one is set.
+- `DisseqtAPIClient.listRunOutputValidations` / `list_run_output_validations`
+  take a **pack id**: the old `/runs/{runId}/output-validations` route never
+  existed (always 404). Deprecated in favour of `listPackOutputValidations`.
+
+### Deprecated
+
+- `Client({ policies, realtimePolicyBaseUrl })` and `validate(req, { policies })`:
+  the policy-evaluate route is not served by any backend. A one-time
+  `console.warn` is logged; removal is planned for the next major.
+
+### Added
+
+- `disseqt` CLI (`bin`): `login` / `logout` / `whoami`; `redteam` (list-attacks,
+  list-techniques, list-personas, attack, session, vuln-test, run, validate,
+  status, cancel, results, report, analytics, recommend, parse-curl,
+  test-connection); `scan` (JSON / SARIF / Markdown, `--diff BASE..HEAD`);
+  resource verbs (`target`, `pack`, `run`, `validation`, `session`,
+  `validator`, `plan`, `plan-run`, `vulnerability`, `app`, ...).
+- Red-team target flags: exactly one of `--app`, `--integration`, `--endpoint`
+  (`--target` is a deprecated alias); zero or several exit 2.
+- Pollers stop on any terminal status (including `stopped`); Ctrl-C (exit 130)
+  or `--max-wait` (exit 1) cancels the run where a cancel route exists.
+- Exit codes: 2 for usage and auth problems (including an over-permissive
+  config file, an unset `${VAR}` in `redteam run` YAML, or a YAML `target`
+  without exactly one id), 1 for API failures.
+- `DisseqtResourceClient` (`targets`, `packs`, `runs`, `validations`,
+  `sessions`, `customValidators`, `ragTargets`, `mcpTargets`,
+  `vulnerabilities`, `plans`, `planRuns`, `redteam`, `applications`,
+  `applicationLinks`, `whoami()`), defaulting to `https://api.disseqt.ai/dataset`.
+  It unwraps the `{status, data}` envelope (opt-in per request, so `Client` and
+  `DisseqtAPIClient` responses are unchanged) and throws the new
+  `DisseqtApiError` on a 2xx `{status:"error"}`.
+- Credential resolution (CLI, `scan` and constructors): args > `DISSEQT_API_KEY`
+  / `DISSEQT_PROJECT_ID` > `~/.disseqt/config.json` (dir 0700, file 0600; wider
+  files are refused). Unless passed explicitly, the project id comes from the key's own source;
+  a stored `base_url` applies unless `DISSEQT_BASE_URL` is set. Same file
+  format as the Python SDK. Project / organization ids that routes require
+  but are not configured are taken from `whoami()`.
+- `BaseAttack`, `BaseSingleTurnAttack`, `BaseMultiTurnAttack`, `BaseMetric`,
+  `BaseVulnerability`, `BaseLLM` extension classes (Python parity).
+- `DisseqtAgenticClient({ applicationId })` sends `X-Application-Id`
+  (UUID-validated).
+- `Client.validateSync()`, an alias of `validate()`.
+- `CreateRunRequest` (prompt packs) gained an optional `applicationId` /
+  `application_id` field. When set and none of `llm_id`/
+  `app_integration_id`/`custom_llm_id` is otherwise supplied, the backend
+  auto-resolves it to that Application's ("AI System") one linked
+  integration. Omitted from the request payload entirely when unset —
+  existing callers see no change on the wire.
+
 ### Fixed
 
 - **`CreateRunRequest`'s `runName` now actually reaches the server.** Since
@@ -24,15 +79,6 @@
   constructor argument so no existing caller breaks, but is now omitted
   from the payload rather than sent as dead weight. No observable
   behavior change from the caller's side of a successful call.
-
-### Added
-
-- `CreateRunRequest` (prompt packs) gained an optional `applicationId` /
-  `application_id` field. When set and none of `llm_id`/
-  `app_integration_id`/`custom_llm_id` is otherwise supplied, the backend
-  auto-resolves it to that Application's ("AI System") one linked
-  integration. Omitted from the request payload entirely when unset —
-  existing callers see no change on the wire.
 
 ## 0.3.0
 

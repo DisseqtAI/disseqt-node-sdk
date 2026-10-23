@@ -1,6 +1,6 @@
 import { clearTimeout, setTimeout } from 'node:timers';
 
-import { DisseqtHttpError, DisseqtJsonError } from './errors.js';
+import { DisseqtApiError, DisseqtHttpError, DisseqtJsonError } from './errors.js';
 import { checkVersionNotice, sdkIdentityHeaders, versionBlockedError } from './versionNotice.js';
 import type {
   DisseqtAuthConfig,
@@ -20,17 +20,17 @@ export interface DisseqtHttpTransportConfig extends DisseqtAuthConfig {
 
 export class DisseqtHttpTransport {
   readonly apiKey: string;
-  readonly projectId: string;
+  readonly projectId: string | undefined;
   readonly timeoutMs: number;
 
   private readonly fetcher: FetchLike;
 
   constructor(config: DisseqtHttpTransportConfig) {
     assertNonEmpty('apiKey', config.apiKey);
-    assertNonEmpty('projectId', config.projectId);
+    const projectId = config.projectId?.trim();
 
     this.apiKey = config.apiKey;
-    this.projectId = config.projectId;
+    this.projectId = projectId === undefined || projectId.length === 0 ? undefined : projectId;
     this.timeoutMs = config.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     this.fetcher = config.fetch ?? globalThis.fetch.bind(globalThis);
   }
@@ -39,7 +39,7 @@ export class DisseqtHttpTransport {
     const includeContentType = options.includeContentType ?? true;
     const headers: Record<string, string> = {
       'X-API-Key': this.apiKey,
-      'X-Project-Id': this.projectId,
+      ...(this.projectId !== undefined ? { 'X-Project-Id': this.projectId } : {}),
       ...sdkIdentityHeaders(),
     };
 
@@ -50,6 +50,10 @@ export class DisseqtHttpTransport {
     return headers;
   }
 
+  /**
+   * Strict JSON path: the body must be an object. With `unwrapEnvelope`, a
+   * `{status:"success",data}` envelope becomes `data` and `{status:"error"}` throws {@link DisseqtApiError}.
+   */
   async requestJson<TResponse extends JsonObject = JsonObject>(
     options: DisseqtRequestOptions,
   ): Promise<TResponse> {
@@ -63,31 +67,32 @@ export class DisseqtHttpTransport {
       throw new DisseqtJsonError('Server returned null/empty JSON response', response.text);
     }
 
-    try {
-      const parsed: unknown = JSON.parse(response.text);
-      if (parsed === null) {
-        throw new DisseqtJsonError('Server returned null/empty JSON response', response.text);
-      }
-      if (!isJsonObject(parsed)) {
-        throw new DisseqtJsonError('Server returned non-object JSON response', response.text);
-      }
-      return parsed as TResponse;
-    } catch (error) {
-      if (error instanceof DisseqtJsonError) {
-        throw error;
-      }
-      const message = error instanceof Error ? error.message : String(error);
-      throw new DisseqtJsonError(
-        `Failed to decode JSON response: ${message}. Response text: ${response.text.slice(0, 200)}`,
-        response.text,
-        { cause: error },
-      );
+    const parsed = parseJson(response.text);
+    const data = options.unwrapEnvelope === true ? unwrapEnvelope(parsed, response.text) : parsed;
+    if (data === null) {
+      throw new DisseqtJsonError('Server returned null/empty JSON response', response.text);
     }
+    if (!isJsonObject(data)) {
+      throw new DisseqtJsonError('Server returned non-object JSON response', response.text);
+    }
+    return data as TResponse;
+  }
+
+  /** Parse arbitrary JSON (arrays included); honours `unwrapEnvelope` like `requestJson`. */
+  async requestJsonAny(options: DisseqtRequestOptions): Promise<unknown> {
+    const response = await this.requestRaw(options);
+    if (response.status === 204) return null;
+    if (response.text.length === 0) return null;
+    const parsed = parseJson(response.text);
+    return options.unwrapEnvelope === true ? unwrapEnvelope(parsed, response.text) : parsed;
   }
 
   async requestRaw(options: DisseqtRequestOptions): Promise<RawResponse> {
     const url = buildUrl(options.url, options.params);
-    const includeContentType = options.includeContentType ?? options.json !== undefined;
+    // Raw body (FormData/Blob) skips application/json — fetch supplies the
+    // right Content-Type + boundary itself.
+    const defaultIncludeCT = options.body === undefined && options.json !== undefined;
+    const includeContentType = options.includeContentType ?? defaultIncludeCT;
     const headers = {
       ...this.buildHeaders({ includeContentType }),
       ...options.headers,
@@ -103,7 +108,9 @@ export class DisseqtHttpTransport {
         signal,
       };
 
-      if (options.json !== undefined) {
+      if (options.body !== undefined) {
+        requestInit.body = options.body;
+      } else if (options.json !== undefined) {
         requestInit.body = JSON.stringify(options.json);
       }
 
@@ -170,6 +177,33 @@ function assertNonEmpty(name: string, value: string): void {
   if (value.trim().length === 0) {
     throw new ValueError(`${name} is required and cannot be empty`);
   }
+}
+
+function parseJson(text: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new DisseqtJsonError(
+      `Failed to decode JSON response: ${message}. Response text: ${text.slice(0, 200)}`,
+      text,
+      { cause: error },
+    );
+  }
+}
+
+/** `{status:"success",data}` → data; `{status:"error",...}` → throw; anything else → as-is. */
+function unwrapEnvelope(parsed: unknown, text: string): unknown {
+  if (!isJsonObject(parsed)) return parsed;
+  if (parsed['status'] === 'error') {
+    const err = isJsonObject(parsed['error']) ? parsed['error'] : {};
+    const external = typeof err['external'] === 'string' ? err['external'] : 'API request failed';
+    const code = typeof parsed['code'] === 'string' ? parsed['code'] : String(err['code'] ?? '');
+    const requestId = typeof parsed['request_id'] === 'string' ? parsed['request_id'] : undefined;
+    throw new DisseqtApiError(external, code, text.slice(0, ERROR_BODY_PREVIEW_LENGTH), requestId);
+  }
+  if (parsed['status'] === 'success' && 'data' in parsed) return parsed['data'];
+  return parsed;
 }
 
 function isJsonObject(value: unknown): value is JsonObject {

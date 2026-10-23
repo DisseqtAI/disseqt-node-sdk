@@ -2,6 +2,7 @@ import {
   DisseqtHttpError,
   DisseqtHttpTransport,
   type DisseqtHttpTransportConfig,
+  stripTrailingSlashes,
 } from '../http/index.js';
 import type { DisseqtRequestOptions, JsonObject, QueryParams } from '../http/types.js';
 import {
@@ -24,7 +25,7 @@ export interface DisseqtAPIClientConfig extends DisseqtHttpTransportConfig {
 }
 
 export class DisseqtAPIClient {
-  readonly projectId: string;
+  readonly projectId: string | undefined;
   readonly apiKey: string;
   readonly baseUrl: string;
   readonly timeoutMs: number;
@@ -34,15 +35,15 @@ export class DisseqtAPIClient {
   constructor(config: DisseqtAPIClientConfig) {
     this.projectId = config.projectId;
     this.apiKey = config.apiKey;
-    this.baseUrl = (config.baseUrl ?? PROMPT_PACKS_DEFAULT_BASE_URL).replace(/\/+$/, '');
+    this.baseUrl = stripTrailingSlashes(config.baseUrl ?? PROMPT_PACKS_DEFAULT_BASE_URL);
     this.timeoutMs =
       config.timeoutMs ?? (config.timeout === undefined ? 30_000 : config.timeout * 1000);
 
     const transportConfig: DisseqtHttpTransportConfig = {
       apiKey: this.apiKey,
-      projectId: this.projectId,
       timeoutMs: this.timeoutMs,
     };
+    if (this.projectId !== undefined) transportConfig.projectId = this.projectId;
     if (config.fetch !== undefined) {
       transportConfig.fetch = config.fetch;
     }
@@ -239,12 +240,17 @@ export class DisseqtAPIClient {
     return this.create_output_validation(runId, request);
   }
 
-  async list_run_output_validations(runId: string): Promise<JsonObject> {
-    return this._request('GET', `/runs/${runId}/output-validations`);
+  /**
+   * No run-scoped list route exists; the backend lists per pack (`GET /:id/output-validations`).
+   * @deprecated Pass the pack id, or use `listPackOutputValidations`.
+   */
+  async list_run_output_validations(packId: string): Promise<JsonObject> {
+    return this._request('GET', `/${packId}/output-validations`);
   }
 
-  listRunOutputValidations(runId: string): Promise<JsonObject> {
-    return this.list_run_output_validations(runId);
+  /** @deprecated See `list_run_output_validations`. */
+  listRunOutputValidations(packId: string): Promise<JsonObject> {
+    return this.list_run_output_validations(packId);
   }
 
   async get_output_validation(validationId: string): Promise<JsonObject> {

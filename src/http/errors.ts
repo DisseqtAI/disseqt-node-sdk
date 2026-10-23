@@ -72,6 +72,21 @@ export class SDKVersionBlockedError extends DisseqtHttpError {
   }
 }
 
+/** The backend answered 2xx with its `{status:"error"}` envelope. */
+export class DisseqtApiError extends DisseqtError {
+  readonly code: string;
+  readonly responseBody: string;
+  readonly requestId: string | undefined;
+
+  constructor(message: string, code = '', responseBody = '', requestId?: string) {
+    super(code.length > 0 ? `${code}: ${message}` : message);
+    this.name = 'DisseqtApiError';
+    this.code = code;
+    this.responseBody = responseBody;
+    this.requestId = requestId;
+  }
+}
+
 export class DisseqtJsonError extends DisseqtError {
   readonly responseText: string;
 

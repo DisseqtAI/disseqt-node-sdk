@@ -1,6 +1,7 @@
 export interface DisseqtAuthConfig {
   apiKey: string;
-  projectId: string;
+  /** Optional: the gateway derives the project from the API key; sent as X-Project-Id only when set. */
+  projectId?: string;
 }
 
 export interface DisseqtClientConfig extends DisseqtAuthConfig {
@@ -21,11 +22,15 @@ export interface DisseqtRequestOptions {
   method: HttpMethod;
   url: string;
   json?: JsonValue;
+  /** Pre-encoded body (FormData / Blob / string); no JSON Content-Type is added. */
+  body?: BodyInit;
   params?: QueryParams;
   headers?: Record<string, string>;
   includeContentType?: boolean;
   errorMessage?: string;
   signal?: AbortSignal;
+  /** Unwrap the dataset-backend `{status,data}` envelope (resource clients only). */
+  unwrapEnvelope?: boolean;
 }
 
 export interface RawResponse {

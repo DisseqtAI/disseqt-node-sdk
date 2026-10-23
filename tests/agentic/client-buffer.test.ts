@@ -230,4 +230,50 @@ describe('DisseqtAgenticClient', () => {
 
     await client.shutdown();
   });
+
+  const flushOne = async (extra: Record<string, unknown>) => {
+    const fetcher = vi.fn<FetchLike>().mockResolvedValue(new Response('{}', { status: 200 }));
+    const client = new DisseqtAgenticClient({
+      apiKey: 'key',
+      projectId: 'project',
+      serviceName: 'svc',
+      endpoint: 'https://api.example.test/traces',
+      flushIntervalMs: 60_000,
+      fetch: fetcher,
+      ...extra,
+    });
+    const trace = new DisseqtTrace({
+      name: 'w',
+      trace_id: 't',
+      project_id: 'project',
+      service_name: 'svc',
+    });
+    trace.startSpan('agent', SpanKind.AgentExec).end();
+    client.sendTrace(trace);
+    await client.flush();
+    await client.shutdown();
+    return (fetcher.mock.calls[0]?.[1]?.headers ?? {}) as Record<string, string>;
+  };
+
+  it('sends X-Application-Id when applicationId is set', async () => {
+    const id = '7b0c3f1e-2d4a-4b8e-9c1f-0a2b3c4d5e6f';
+    expect((await flushOne({ applicationId: id }))['X-Application-Id']).toBe(id);
+    expect((await flushOne({ application_id: id }))['X-Application-Id']).toBe(id);
+  });
+
+  it('omits X-Application-Id when unset', async () => {
+    expect(await flushOne({})).not.toHaveProperty('X-Application-Id');
+  });
+
+  it('rejects a non-UUID applicationId at construction', () => {
+    expect(
+      () =>
+        new DisseqtAgenticClient({
+          apiKey: 'k',
+          projectId: 'p',
+          serviceName: 's',
+          applicationId: 'nope',
+        }),
+    ).toThrow(/application_id must be a UUID/);
+  });
 });

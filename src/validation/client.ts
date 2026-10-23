@@ -1,3 +1,4 @@
+import { resolveAuthSync } from '../auth/resolve.js';
 import { DisseqtHttpTransport, type DisseqtHttpTransportConfig } from '../http/index.js';
 import type { JsonObject } from '../http/types.js';
 import { ValidatorDomain } from './enums.js';
@@ -31,7 +32,11 @@ export interface SupportsInputData {
   toInputData(): JsonObject;
 }
 
-export interface ClientConfig extends DisseqtHttpTransportConfig {
+export interface ClientConfig extends Omit<DisseqtHttpTransportConfig, 'apiKey' | 'projectId'> {
+  /** Optional: falls back to `DISSEQT_API_KEY`, then `~/.disseqt/config.json`. */
+  apiKey?: string;
+  /** Optional: the API key identifies the project; sent as X-Project-Id only when set. */
+  projectId?: string;
   baseUrl?: string;
   timeout?: number;
   /**
@@ -52,6 +57,7 @@ export interface ClientConfig extends DisseqtHttpTransportConfig {
    * has no SDK routes). Kept separate from `baseUrl` so the two endpoints
    * can be mocked / routed independently — override for local testing
    * (e.g. `http://localhost:9010`) without disturbing `baseUrl` callers.
+   * @deprecated The policy-evaluate route is not served by any current backend; removal planned.
    */
   realtimePolicyBaseUrl?: string;
   realtime_policy_base_url?: string;
@@ -65,6 +71,7 @@ export interface ClientConfig extends DisseqtHttpTransportConfig {
    * so env-driven config degrades naturally. The list is copied
    * defensively; later mutation of the caller's array does not affect the
    * client.
+   * @deprecated The policy-evaluate route is not served by any current backend; removal planned.
    */
   policies?: readonly string[];
 }
@@ -74,6 +81,7 @@ export interface ValidateOptions {
    * Published policy ids to evaluate the input against; overrides the
    * client-level default. Composite-score and themes-classifier requests
    * cannot be combined with policies.
+   * @deprecated The policy-evaluate route is not served by any current backend; removal planned.
    */
   policies?: readonly string[];
 }
@@ -125,7 +133,7 @@ export interface PolicyValidationResult extends JsonObject {
  *    URL. Requires `applicationName` on the client.
  */
 export class Client {
-  readonly projectId: string;
+  readonly projectId: string | undefined;
   readonly apiKey: string;
   readonly baseUrl: string;
   readonly timeoutMs: number;
@@ -144,6 +152,13 @@ export class Client {
 
   constructor(config: ClientConfig) {
     const applicationName = config.applicationName ?? config.application_name ?? null;
+    if (
+      config.policies !== undefined ||
+      config.realtimePolicyBaseUrl !== undefined ||
+      config.realtime_policy_base_url !== undefined
+    ) {
+      warnPoliciesDeprecated();
+    }
     let defaultPolicies: readonly string[] | null = null;
     if (config.policies !== undefined) {
       // Normalize before the emptiness check — a Set or other iterable
@@ -175,8 +190,12 @@ export class Client {
         defaultPolicies = copied;
       }
     }
-    this.projectId = config.projectId;
-    this.apiKey = config.apiKey;
+    const overrides: Parameters<typeof resolveAuthSync>[0] = {};
+    if (config.apiKey !== undefined) overrides.apiKey = config.apiKey;
+    if (config.projectId !== undefined) overrides.projectId = config.projectId;
+    const resolved = resolveAuthSync(overrides);
+    this.projectId = resolved.projectId;
+    this.apiKey = resolved.apiKey;
     this.baseUrl = config.baseUrl ?? DEFAULT_BASE_URL;
     this.timeoutMs =
       config.timeoutMs ?? (config.timeout === undefined ? 30_000 : config.timeout * 1000);
@@ -186,9 +205,9 @@ export class Client {
     this.policies = defaultPolicies;
     const transportConfig: DisseqtHttpTransportConfig = {
       apiKey: this.apiKey,
-      projectId: this.projectId,
       timeoutMs: this.timeoutMs,
     };
+    if (this.projectId !== undefined) transportConfig.projectId = this.projectId;
     if (config.fetch !== undefined) {
       transportConfig.fetch = config.fetch;
     }
@@ -272,6 +291,7 @@ export class Client {
     options?: ValidateOptions,
   ): Promise<JsonObject> {
     if (options?.policies !== undefined) {
+      warnPoliciesDeprecated();
       return this.validateWithPolicies(request, options.policies);
     }
     if (this.policies !== null && !isPolicyIncompatible(request)) {
@@ -288,6 +308,14 @@ export class Client {
       );
     }
     return this.runValidator(request);
+  }
+
+  /** Alias of `validate()` kept for API stability. */
+  async validateSync(
+    request: Validatable | GenericValidationRequest | SupportsInputData,
+    options?: ValidateOptions,
+  ): Promise<JsonObject> {
+    return this.validate(request, options);
   }
 
   /**
@@ -425,6 +453,18 @@ export class Client {
 }
 
 export { Client as DisseqtClient };
+
+let policiesWarned = false;
+
+// One warning per process: the realtime-policy surface is kept only for compatibility.
+function warnPoliciesDeprecated(): void {
+  if (policiesWarned) return;
+  policiesWarned = true;
+  globalThis.console.warn(
+    '[disseqt] Client `policies` / `realtimePolicyBaseUrl` are deprecated: the policy-evaluate ' +
+      'route is not served by any current backend and will be removed in a future release.',
+  );
+}
 
 function isNonBlankString(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0;

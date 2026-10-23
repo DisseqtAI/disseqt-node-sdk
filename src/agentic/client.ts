@@ -12,6 +12,9 @@ export interface DisseqtAgenticClientConfig {
   project_id?: string;
   serviceName?: string;
   service_name?: string;
+  /** AI System (application) UUID, sent as X-Application-Id when set (Python parity). */
+  applicationId?: string;
+  application_id?: string;
   endpoint?: string;
   serviceVersion?: string;
   service_version?: string;
@@ -34,6 +37,7 @@ export class DisseqtAgenticClient {
   readonly apiKey: string;
   readonly projectId: string;
   readonly serviceName: string;
+  readonly applicationId: string | undefined;
   readonly serviceVersion: string;
   readonly environment: string;
   readonly endpoint: string;
@@ -56,6 +60,7 @@ export class DisseqtAgenticClient {
     this.apiKey = apiKey;
     this.projectId = projectId;
     this.serviceName = serviceName;
+    this.applicationId = parseApplicationId(config.applicationId ?? config.application_id);
     this.serviceVersion = config.serviceVersion ?? config.service_version ?? '1.0.0';
     this.environment = environment;
     this.endpoint = endpoint;
@@ -64,6 +69,7 @@ export class DisseqtAgenticClient {
       endpoint,
       apiKey,
       maxRetries: config.maxRetries ?? config.max_retries ?? 3,
+      ...(this.applicationId !== undefined ? { applicationId: this.applicationId } : {}),
     };
     this.transport = new AgenticHTTPTransport(
       config.fetch === undefined ? transportConfig : { ...transportConfig, fetch: config.fetch },
@@ -93,6 +99,16 @@ export class DisseqtAgenticClient {
   async shutdown(): Promise<void> {
     await this.buffer.stop();
   }
+}
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function parseApplicationId(value: string | undefined): string | undefined {
+  const trimmed = value?.trim();
+  if (trimmed === undefined || trimmed.length === 0) return undefined;
+  if (!UUID_RE.test(trimmed))
+    throw new ValueError(`application_id must be a UUID (got "${trimmed}")`);
+  return trimmed;
 }
 
 function secondsToMilliseconds(seconds: number): number {
