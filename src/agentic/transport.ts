@@ -8,6 +8,7 @@ import type { EnrichedSpan } from './models.js';
 export interface AgenticHTTPTransportConfig {
   endpoint: string;
   apiKey?: string | null;
+  applicationId?: string;
   timeoutMs?: number;
   maxRetries?: number;
   fetch?: FetchLike;
@@ -26,6 +27,7 @@ export interface CustomTracePayload extends JsonObject {
 export class AgenticHTTPTransport {
   readonly endpoint: string;
   readonly apiKey: string | null;
+  readonly applicationId: string | undefined;
   readonly timeoutMs: number;
   readonly maxRetries: number;
 
@@ -35,6 +37,7 @@ export class AgenticHTTPTransport {
     assertNonEmpty('endpoint', config.endpoint);
     this.endpoint = stripTrailingSlashes(config.endpoint);
     this.apiKey = config.apiKey ?? null;
+    this.applicationId = config.applicationId;
     this.timeoutMs = config.timeoutMs ?? 10_000;
     this.maxRetries = config.maxRetries ?? 3;
     this.fetcher = config.fetch ?? globalThis.fetch.bind(globalThis);
@@ -86,6 +89,7 @@ export class AgenticHTTPTransport {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          ...(this.applicationId !== undefined ? { 'X-Application-Id': this.applicationId } : {}),
         },
         body: JSON.stringify(payload),
         signal: controller.signal,
