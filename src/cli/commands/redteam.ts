@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 
 import type { Command } from 'commander';
 import { load as yamlLoad } from 'js-yaml';
@@ -7,7 +7,17 @@ import type { RedteamClient, RedteamValidateRequest } from '../../resources/redt
 import { DisseqtHttpError } from '../../http/errors.js';
 import type { JsonObject, JsonValue } from '../../http/types.js';
 import { readBody } from '../parse.js';
-import { buildClient, emit, EXIT_USAGE, runAction } from '../config.js';
+import { buildClient, emit, runAction } from '../config.js';
+import {
+  requireTarget,
+  resolveTarget,
+  targetFields,
+  targetOptions,
+  usage,
+  type Target,
+  type TargetFlags,
+  warnTargetDeprecated,
+} from '../target.js';
 
 // Request bodies mirror the Go structs in disseqt-dataset-backend:
 //   api/testing_types.go            CreateTestingSessionRequest / CreateTestingRunRequest
@@ -23,8 +33,9 @@ interface CommonOpts {
 const commonJson = (cmd: Command): Command => cmd.option('--json', 'emit JSON output', false);
 
 const MAX_TARGET_PROMPTS = 10;
-const DEFAULT_MAX_DEPTH = 3;
-const DEFAULT_MAX_TOTAL_PROMPTS = 50;
+const DEFAULT_MAX_DEPTH = 5;
+// 0 = unlimited (pkg/testing/pipeline.go ExecutionConfig).
+const DEFAULT_MAX_TOTAL_PROMPTS = 0;
 
 const TERMINAL = new Set([
   'completed',
@@ -109,32 +120,60 @@ const pollUntilTerminal = async <T extends JsonObject>(
   }
 };
 
-/** `TestingPlanConfig` (pkg/testing/pipeline.go) from CLI-level inputs. */
+/** `TestingPlanConfig` (pkg/testing/pipeline.go); the strategy reads `config.techniques`. */
 const buildTestingPlan = (input: {
   techniques: string[];
   packs: string[];
   validators: string[];
+  stopOnFirstBreach?: boolean;
   maxTotalPrompts?: number;
 }): JsonObject => ({
-  prompt_sources:
-    input.packs.length > 0 ? [{ type: 'prompt_pack', config: { pack_ids: input.packs } }] : [],
-  attack_strategies: [{ type: 'single_turn_jailbreak', techniques: input.techniques }],
+  prompt_sources: [{ type: 'prompt_pack', config: { pack_ids: input.packs } }],
+  attack_strategies: [
+    {
+      type: 'single_turn_jailbreak',
+      techniques: input.techniques,
+      config: { techniques: input.techniques },
+    },
+  ],
   validators: input.validators,
   execution: {
     mode: 'sequential',
-    stop_on_first_breach: false,
+    stop_on_first_breach: input.stopOnFirstBreach ?? false,
     max_total_prompts: input.maxTotalPrompts ?? DEFAULT_MAX_TOTAL_PROMPTS,
   },
 });
 
-/** `CreateTestingRunRequest` (api/testing_types.go): run_name, trigger_metadata, application_id. */
-const buildRunBody = (runName: string | undefined, applicationId: unknown): JsonObject => {
-  const body: JsonObject = { trigger_metadata: { source: 'cli' } };
-  if (runName !== undefined) body['run_name'] = runName;
-  if (typeof applicationId === 'string' && applicationId.length > 0) {
-    body['application_id'] = applicationId;
+/** `CreateTestingSessionRequest`: application_context needs name + type or the session stays `draft`. */
+const buildSessionBody = (
+  name: string,
+  application: JsonObject,
+  targetConfig: JsonObject,
+  testingPlan: JsonObject,
+): JsonObject => ({
+  name,
+  application_context: {
+    ...application,
+    name: typeof application['name'] === 'string' ? application['name'] : name,
+    type: typeof application['type'] === 'string' ? application['type'] : 'web',
+  },
+  target_config: targetConfig,
+  testing_plan: testingPlan,
+});
+
+/** `CreateTestingRunRequest` (api/testing_types.go). */
+const buildRunBody = (runName: string): JsonObject => ({
+  run_name: runName,
+  trigger_metadata: { source: 'disseqt-cli' },
+});
+
+/** YAML key with a deprecated alias; warns on stderr when only the alias is present. */
+const pickKey = (config: JsonObject, key: string, alias: string): unknown => {
+  if (config[key] !== undefined) return config[key];
+  if (config[alias] !== undefined) {
+    process.stderr.write(`warning: YAML key "${alias}" is deprecated; use "${key}"\n`);
   }
-  return body;
+  return config[alias];
 };
 
 const isNotFound = (error: unknown): boolean =>
@@ -195,9 +234,46 @@ const resultsToMarkdown = (payload: unknown): string => {
 
 const rt = (): RedteamClient => buildClient().redteam;
 
-const usage = (msg: string): never => {
-  process.stderr.write(`error: ${msg}\n`);
-  process.exit(EXIT_USAGE);
+/** `BatchAutomateJailbreakRequest` target part: an id (no template, no init-curl) or the legacy template. */
+const multiTurnTarget = (
+  target: Target,
+  config: JsonObject,
+): { body: JsonObject; config: JsonObject } => {
+  if (target.kind === 'integration') return { body: { app_integration_id: target.id }, config };
+  if (target.kind === 'app') return { body: {}, config: { ...config, application_id: target.id } };
+  if (target.kind === 'template')
+    return { body: { app_integration_template: target.template }, config };
+  return usage('multi-turn --endpoint takes an app_integration_template (JSON or @file)');
+};
+
+/** `VulnerabilityTestRequest`: `{app_integration_id | application_id | llm_config}` (app integrations only). */
+export const vulnTestBody = (opts: TargetFlags & { llmConfig?: string }): JsonObject => {
+  // Here `--target` always meant an app integration id (no UUID check, as before).
+  const { target: legacy, ...rest } = opts;
+  if (legacy !== undefined) {
+    if (rest.app !== undefined || rest.integration !== undefined || rest.endpoint !== undefined) {
+      usage('pass exactly one of --app, --integration, --endpoint');
+    }
+    warnTargetDeprecated();
+    return { app_integration_id: legacy };
+  }
+  const target = resolveTarget(opts, 'single', opts.llmConfig === undefined);
+  if (target === null) return { llm_config: readBody(opts.llmConfig) as JsonValue };
+  if (opts.llmConfig !== undefined) usage('pass exactly one of --app, --integration, --llm-config');
+  if (target.kind === 'endpoint') usage('vuln-test accepts --app or --integration, not --endpoint');
+  return targetFields(target);
+};
+
+/** Query scope for the vuln-test routes; both ids are optional (the gateway injects them). */
+export const vulnScope = (
+  projectId: string | undefined,
+  organizationId: string | undefined,
+): Record<string, string> => {
+  const orgId = organizationId ?? process.env['DISSEQT_ORGANIZATION_ID'] ?? '';
+  return {
+    ...(projectId !== undefined ? { project_id: projectId } : {}),
+    ...(orgId.length > 0 ? { organization_id: orgId } : {}),
+  };
 };
 
 export function registerRedteam(program: Command): void {
@@ -284,10 +360,13 @@ export function registerRedteam(program: Command): void {
     .option('--single-turn', 'run a single-turn attack (testing sessions/runs)', false)
     .option('--multi-turn', 'run a multi-turn attack (mr-jailbreak batch-automate)', false)
     .requiredOption('--technique <id>', 'attack technique id (single-turn key or multi-turn uuid)')
-    .requiredOption(
-      '--target <id|file>',
-      'single-turn: application_id; multi-turn: JSON file with the app_integration_template',
+    .option('--app <application_id>', 'AI System (application) id; its linked integration is used')
+    .option('--integration <app_integration_id>', 'app integration id')
+    .option(
+      '--endpoint <value>',
+      'single-turn: target endpoint URL; multi-turn: app_integration_template (JSON or @file)',
     )
+    .option('--target <value>', 'deprecated: UUID → --app; JSON/@file → template (multi-turn)')
     .option('--prompt <text>', 'multi-turn target prompt (repeatable, 1..10)', collect, [])
     .option('--pack <id>', 'single-turn prompt pack id (repeatable)', collect, [])
     .option('--validator <name>', 'single-turn validator (repeatable)', collect, [])
@@ -306,7 +385,10 @@ export function registerRedteam(program: Command): void {
         singleTurn?: boolean;
         multiTurn?: boolean;
         technique: string;
-        target: string;
+        app?: string;
+        integration?: string;
+        endpoint?: string;
+        target?: string;
         prompt: string[];
         pack: string[];
         validator: string[];
@@ -328,30 +410,30 @@ export function registerRedteam(program: Command): void {
           if (opts.prompt.length === 0 || opts.prompt.length > MAX_TARGET_PROMPTS) {
             usage(`--multi-turn needs 1..${MAX_TARGET_PROMPTS} --prompt values`);
           }
-          if (!existsSync(opts.target)) {
-            usage('--multi-turn needs --target <file> holding the app_integration_template JSON');
-          }
-          const template = readJsonFile(opts.target);
+          const target = requireTarget(opts, 'multi');
           const maxDepth = Number(opts.maxDepth);
           if (!Number.isInteger(maxDepth) || maxDepth < 1 || maxDepth > 10) {
             usage('--max-depth must be an integer in 1..10');
           }
+          const tplName = target.kind === 'template' ? target.template['name'] : undefined;
+          const appName = opts.appName ?? (typeof tplName === 'string' ? tplName : opts.name);
           await runAction(async () => {
             const client = buildClient();
+            const projectId = client.transport.projectId;
+            const picked = multiTurnTarget(target, {
+              ...(projectId !== undefined ? { project_id: projectId } : {}),
+              job_name_prefix: opts.name,
+              app_name: appName,
+              app_description_short: opts.appDescription ?? `${appName} (disseqt CLI)`,
+              app_type: opts.appType,
+              max_depth: maxDepth,
+              orchestration_mode: 'single',
+              technique_id: opts.technique,
+            });
             const body: JsonObject = {
               target_prompts: opts.prompt,
-              app_integration_template: template,
-              jailbreak_config: {
-                project_id: client.transport.projectId,
-                job_name_prefix: opts.name,
-                app_name: opts.appName ?? String(template['name'] ?? opts.name),
-                app_description_short:
-                  opts.appDescription ?? String(template['description'] ?? template['name'] ?? ''),
-                app_type: opts.appType,
-                max_depth: maxDepth,
-                orchestration_mode: 'single',
-                technique_id: opts.technique,
-              },
+              ...picked.body,
+              jailbreak_config: picked.config,
               ecid_prefix: 'cli',
               ecid_start_number: 1,
             };
@@ -364,30 +446,37 @@ export function registerRedteam(program: Command): void {
                 await pollUntilTerminal(() => client.redteam.getMrJob(jobId), pollMs, maxMs),
               );
             }
-            emit({ ...batch, jobs }, true);
+            emit({ batch, jobs }, true);
           });
           return;
         }
 
+        const target = requireTarget(opts, 'single');
+        if (opts.pack.length === 0 || opts.validator.length === 0) {
+          usage('--single-turn needs at least one --pack and one --validator');
+        }
         await runAction(async () => {
           const client = rt();
-          const session = await client.createSession({
-            name: `${opts.name}-${opts.technique}-${Date.now()}`,
-            application_context: {},
-            target_config: { application_id: opts.target },
-            testing_plan: buildTestingPlan({
-              techniques: [opts.technique],
-              packs: opts.pack,
-              validators: opts.validator,
-            }),
-          });
+          const name = `${opts.name}-${opts.technique}-${Date.now()}`;
+          const session = await client.createSession(
+            buildSessionBody(
+              name,
+              {},
+              targetFields(target),
+              buildTestingPlan({
+                techniques: [opts.technique],
+                packs: opts.pack,
+                validators: opts.validator,
+              }),
+            ),
+          );
           const sessionId = resolveId(session, 'id', 'session_id');
           if (sessionId === null) {
             throw new Error(
               `could not resolve session id from response: ${JSON.stringify(session)}`,
             );
           }
-          const run = await client.createRun(sessionId, buildRunBody(undefined, opts.target));
+          const run = await client.createRun(sessionId, buildRunBody(name));
           const runId = resolveId(run, 'id', 'run_id');
           if (runId === null) {
             throw new Error(`could not resolve run id from response: ${JSON.stringify(run)}`);
@@ -415,39 +504,28 @@ export function registerRedteam(program: Command): void {
   // vuln-test — POST /api/v1/vulnerabilities/{id}/test/poll
   // -------------------------------------------------------------------
 
-  cmd
-    .command('vuln-test')
-    .description('run the polling vuln-test endpoint for one vulnerability')
-    .requiredOption('--vulnerability <id>', 'vulnerability id to test')
-    .option('--target <id>', 'app integration id (sent as app_integration_id)')
-    .option('--llm-config <json|file|->', 'llm_config object instead of --target')
-    .option(
-      '--organization-id <id>',
-      'organization scope (query param; default env DISSEQT_ORGANIZATION_ID)',
-    )
+  targetOptions(
+    cmd
+      .command('vuln-test')
+      .description('run the polling vuln-test endpoint for one vulnerability')
+      .requiredOption('--vulnerability <id>', 'vulnerability id to test'),
+    'deprecated alias of --integration',
+  )
+    .option('--llm-config <json|file|->', 'llm_config object instead of a target')
+    .option('--organization-id <id>', 'organization scope (default env DISSEQT_ORGANIZATION_ID)')
     .action(
-      async (opts: {
-        vulnerability: string;
-        target?: string;
-        llmConfig?: string;
-        organizationId?: string;
-      }) => {
-        const orgId = opts.organizationId ?? process.env['DISSEQT_ORGANIZATION_ID'] ?? '';
-        if (orgId.length === 0) usage('pass --organization-id or set DISSEQT_ORGANIZATION_ID');
-        if ((opts.target === undefined) === (opts.llmConfig === undefined)) {
-          usage('pass exactly one of --target or --llm-config');
-        }
-        const body: JsonObject =
-          opts.target !== undefined
-            ? { app_integration_id: opts.target }
-            : { llm_config: readBody(opts.llmConfig) as JsonValue };
+      async (
+        opts: { vulnerability: string; llmConfig?: string; organizationId?: string } & TargetFlags,
+      ) => {
+        const body = vulnTestBody(opts);
         await runAction(async () => {
           const client = buildClient();
           emit(
-            await client.vulnerabilities.testPoll(opts.vulnerability, body, {
-              project_id: client.transport.projectId,
-              organization_id: orgId,
-            }),
+            await client.vulnerabilities.testPoll(
+              opts.vulnerability,
+              body,
+              vulnScope(client.transport.projectId, opts.organizationId),
+            ),
             true,
           );
         });
@@ -461,7 +539,7 @@ export function registerRedteam(program: Command): void {
   cmd
     .command('run [configPath]')
     .description(
-      'create a testing session + run from YAML (keys: name, application_context, target_config, testing_plan | techniques/packs/validators, run_name)',
+      'create a testing session + run from YAML (keys: name, application, target, prompt_packs, techniques, validators, stop_on_first_breach, max_total_prompts, run_name | testing_plan)',
     )
     .option('--json', 'emit the raw session + run payloads', false)
     .action(async (configPath: string | undefined, opts: CommonOpts) => {
@@ -470,37 +548,32 @@ export function registerRedteam(program: Command): void {
       }
       await runAction(async () => {
         const config = expandEnv(readYamlFile(configPath as string)) as JsonObject;
-        const targetConfig = isObject(config['target_config'])
-          ? config['target_config']
-          : isObject(config['target'])
-            ? config['target']
-            : {};
+        const target = pickKey(config, 'target', 'target_config');
+        const application = pickKey(config, 'application', 'application_context');
         const asList = (v: unknown): string[] => (Array.isArray(v) ? v.map(String) : []);
-        const sessionBody: JsonObject = {
-          name: String(config['name'] ?? `cli-run-${Date.now()}`),
-          application_context: isObject(config['application_context'])
-            ? config['application_context']
-            : {},
-          target_config: targetConfig,
-          testing_plan: isObject(config['testing_plan'])
+        const name = String(config['name'] ?? `cli-run-${Date.now()}`);
+        const sessionBody = buildSessionBody(
+          name,
+          isObject(application) ? application : {},
+          isObject(target) ? target : {},
+          isObject(config['testing_plan'])
             ? config['testing_plan']
             : buildTestingPlan({
                 techniques: asList(config['techniques']),
-                packs: asList(config['packs']),
+                packs: asList(pickKey(config, 'prompt_packs', 'packs')),
                 validators: asList(config['validators']),
+                stopOnFirstBreach: config['stop_on_first_breach'] === true,
+                maxTotalPrompts: Number(config['max_total_prompts'] ?? DEFAULT_MAX_TOTAL_PROMPTS),
               }),
-        };
+        );
         const client = rt();
         const session = await client.createSession(sessionBody);
         const sessionId = resolveId(session, 'id', 'session_id');
         if (sessionId === null) {
           throw new Error(`could not resolve session id from response: ${JSON.stringify(session)}`);
         }
-        const runName = typeof config['run_name'] === 'string' ? config['run_name'] : undefined;
-        const launched = await client.createRun(
-          sessionId,
-          buildRunBody(runName, targetConfig['application_id']),
-        );
+        const runName = typeof config['run_name'] === 'string' ? config['run_name'] : name;
+        const launched = await client.createRun(sessionId, buildRunBody(runName));
         if (opts.json === true) {
           emit({ session, run: launched }, true);
           return;

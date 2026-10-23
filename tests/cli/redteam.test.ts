@@ -19,6 +19,9 @@ let server: Server;
 let baseUrl = '';
 const requests: Recorded[] = [];
 
+const APP = '11111111-1111-4111-8111-111111111111';
+const INT = '22222222-2222-4222-8222-222222222222';
+
 // Route → response body. Non-matching paths get `{id, status: completed}`.
 const responseMap: Record<string, unknown> = {
   '/api/v1/testing/attack-techniques': [{ id: 'jb-1', name: 'JailbreakLike' }],
@@ -38,6 +41,14 @@ const responseMap: Record<string, unknown> = {
   },
   '/api/v1/jailbreak/analytics/summary': { total_prompts: 42, blocked: 3 },
   '/api/v1/jailbreak/analytics/prompts-stats': { avg_length: 55 },
+  '/api/v1/applications': { applications: [{ id: APP, name: 'support-bot' }], count: 1 },
+  '/api/v1/llm/application-links': {
+    application_id: APP,
+    app_integrations: [{ id: 'link-1', app_integration_id: INT }],
+    llm_integrations: [],
+    rag_integrations: [],
+    mcp_integrations: [],
+  },
 };
 
 beforeAll(async () => {
@@ -235,9 +246,9 @@ describe('disseqt redteam CLI', () => {
         project_id: 'p',
         job_name_prefix: 'cli',
         app_name: 'my-app',
-        app_description_short: 'support bot',
+        app_description_short: 'my-app (disseqt CLI)',
         app_type: 'chatbot',
-        max_depth: 3,
+        max_depth: 5,
         orchestration_mode: 'single',
         technique_id: 't1',
       },
@@ -247,8 +258,10 @@ describe('disseqt redteam CLI', () => {
     const seen = requests.slice(before).map((r) => r.url);
     expect(seen).toContain('/api/v1/mr-jailbreak/jobs/job-1');
     expect(seen).toContain('/api/v1/mr-jailbreak/jobs/job-2');
-    const out = JSON.parse(result.stdout) as { jobs: { status: string }[] };
+    const out = JSON.parse(result.stdout) as { batch: unknown; jobs: { status: string }[] };
+    expect(out.batch).toHaveProperty('total_target_prompts', 2);
     expect(out.jobs.map((j) => j.status)).toEqual(['completed', 'completed']);
+    expect(result.stderr).toContain('--target is deprecated');
   });
 
   it('attack --multi-turn rejects more than 10 prompts', async () => {
@@ -281,8 +294,8 @@ describe('disseqt redteam CLI', () => {
       '--single-turn',
       '--technique',
       't1',
-      '--target',
-      'app-1',
+      '--app',
+      APP,
       '--pack',
       'pack-1',
       '--validator',
@@ -303,18 +316,25 @@ describe('disseqt redteam CLI', () => {
       'target_config',
       'testing_plan',
     ]);
-    expect(sessionBody['target_config']).toEqual({ application_id: 'app-1' });
+    expect(sessionBody['target_config']).toEqual({ application_id: APP });
+    // name + type keep the session out of `draft` (determineSessionStatus).
+    expect(sessionBody['application_context']).toEqual({
+      name: sessionBody['name'],
+      type: 'web',
+    });
     expect(sessionBody['testing_plan']).toEqual({
       prompt_sources: [{ type: 'prompt_pack', config: { pack_ids: ['pack-1'] } }],
-      attack_strategies: [{ type: 'single_turn_jailbreak', techniques: ['t1'] }],
+      attack_strategies: [
+        { type: 'single_turn_jailbreak', techniques: ['t1'], config: { techniques: ['t1'] } },
+      ],
       validators: ['toxicity'],
-      execution: { mode: 'sequential', stop_on_first_breach: false, max_total_prompts: 50 },
+      execution: { mode: 'sequential', stop_on_first_breach: false, max_total_prompts: 0 },
     });
     const run = seen.find((r) => r.url === '/api/v1/testing/sessions/test-id/runs');
     expect(run?.method).toBe('POST');
     expect(JSON.parse(run?.body ?? '{}')).toEqual({
-      trigger_metadata: { source: 'cli' },
-      application_id: 'app-1',
+      run_name: sessionBody['name'],
+      trigger_metadata: { source: 'disseqt-cli' },
     });
     const urls = seen.map((r) => `${r.method ?? ''} ${r.url ?? ''}`);
     expect(urls).toContain('GET /api/v1/testing/runs/test-id');
@@ -347,12 +367,13 @@ describe('disseqt redteam CLI', () => {
     expect(JSON.parse(req?.body ?? '{}')).toEqual({ app_integration_id: 'int-1' });
   });
 
-  it('vuln-test without an organization id exits 2', async () => {
+  it('vuln-test without an organization id omits it (the gateway scopes the org)', async () => {
     const result = await runCli(
-      ['redteam', 'vuln-test', '--vulnerability', 'v1', '--target', 'int-1'],
+      ['redteam', 'vuln-test', '--vulnerability', 'v1', '--integration', INT],
       { DISSEQT_ORGANIZATION_ID: '' },
     );
-    expect(result.code).toBe(2);
+    expect(result.code).toBe(0);
+    expect(requests.at(-1)?.url).toBe('/api/v1/vulnerabilities/v1/test/poll?project_id=p');
   });
 
   it('validate POSTs the standard body shape', async () => {
@@ -548,8 +569,12 @@ describe('disseqt redteam CLI', () => {
       [
         'name: nightly',
         'run_name: nightly-1',
-        'target_config:',
+        'application:',
+        '  name: support-bot',
+        'target:',
         '  application_id: app-9',
+        'prompt_packs:',
+        '  - pack-9',
         'techniques:',
         '  - t1',
         'validators:',
@@ -565,19 +590,50 @@ describe('disseqt redteam CLI', () => {
     expect(seen[0]?.url).toBe('/api/v1/testing/sessions');
     const sessionBody = JSON.parse(seen[0]?.body ?? '{}') as Record<string, unknown>;
     expect(sessionBody['name']).toBe('nightly');
-    expect(sessionBody['application_context']).toEqual({});
+    expect(sessionBody['application_context']).toEqual({ name: 'support-bot', type: 'web' });
     expect(sessionBody['target_config']).toEqual({ application_id: 'app-9' });
     expect(sessionBody['testing_plan']).toMatchObject({
-      prompt_sources: [],
+      prompt_sources: [{ type: 'prompt_pack', config: { pack_ids: ['pack-9'] } }],
       attack_strategies: [{ type: 'single_turn_jailbreak', techniques: ['t1'] }],
       validators: ['v1'],
+      execution: { max_total_prompts: 0 },
     });
     expect(seen[1]?.url).toBe('/api/v1/testing/sessions/test-id/runs');
     expect(JSON.parse(seen[1]?.body ?? '{}')).toEqual({
       run_name: 'nightly-1',
-      trigger_metadata: { source: 'cli' },
-      application_id: 'app-9',
+      trigger_metadata: { source: 'disseqt-cli' },
     });
+    expect(result.stderr).not.toContain('deprecated');
+  });
+
+  it('run <config.yaml> still accepts the old packs/application_context/target_config keys', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'disseqt-yaml-'));
+    const path = join(dir, 'old.yaml');
+    writeFileSync(
+      path,
+      [
+        'name: old',
+        'application_context:',
+        '  name: legacy-bot',
+        'target_config:',
+        '  application_id: app-7',
+        'packs: [pack-7]',
+        'techniques: [t1]',
+        'validators: [v1]',
+        '',
+      ].join('\n'),
+      'utf-8',
+    );
+    const before = requests.length;
+    const result = await runCli(['redteam', 'run', path, '--json']);
+    expect(result.code).toBe(0);
+    const body = JSON.parse(requests[before]?.body ?? '{}') as Record<string, unknown>;
+    expect(body['application_context']).toEqual({ name: 'legacy-bot', type: 'web' });
+    expect(body['target_config']).toEqual({ application_id: 'app-7' });
+    expect(body['testing_plan']).toMatchObject({
+      prompt_sources: [{ type: 'prompt_pack', config: { pack_ids: ['pack-7'] } }],
+    });
+    expect(result.stderr).toMatch(/deprecated/);
   });
 
   it('vulnerability test <id> --target sends app_integration_id + scope query', async () => {
@@ -595,5 +651,234 @@ describe('disseqt redteam CLI', () => {
     expect(req?.url).toBe('/api/v1/vulnerabilities/v1/test?project_id=p&organization_id=org-1');
     expect(req?.method).toBe('POST');
     expect(JSON.parse(req?.body ?? '{}')).toEqual({ app_integration_id: 'int-1' });
+  });
+});
+
+describe('target selection (--app / --integration / --endpoint)', () => {
+  const single = ['redteam', 'attack', '--single-turn', '--technique', 't1', '--pack', 'p1'];
+  const singleTail = ['--validator', 'v1', '--poll-interval', '0.01', '--max-wait', '5'];
+  const sessionBody = (before: number): Record<string, unknown> =>
+    JSON.parse(
+      requests.slice(before).find((r) => r.url === '/api/v1/testing/sessions')?.body ?? '{}',
+    ) as Record<string, unknown>;
+
+  it('single-turn --integration → target_config.app_integration_id', async () => {
+    const before = requests.length;
+    const result = await runCli([...single, '--integration', INT, ...singleTail]);
+    expect(result.code).toBe(0);
+    expect(sessionBody(before)['target_config']).toEqual({ app_integration_id: INT });
+  });
+
+  it('single-turn --endpoint → target_config.endpoint_url', async () => {
+    const before = requests.length;
+    const result = await runCli([...single, '--endpoint', 'https://t.example/chat', ...singleTail]);
+    expect(result.code).toBe(0);
+    expect(sessionBody(before)['target_config']).toEqual({
+      endpoint_url: 'https://t.example/chat',
+    });
+  });
+
+  it('single-turn --target <uuid> is a deprecated alias for --app', async () => {
+    const before = requests.length;
+    const result = await runCli([...single, '--target', APP, ...singleTail]);
+    expect(result.code).toBe(0);
+    expect(sessionBody(before)['target_config']).toEqual({ application_id: APP });
+    expect(result.stderr).toContain('--target is deprecated');
+  });
+
+  it('no target, or two targets, exits 2', async () => {
+    expect((await runCli([...single, ...singleTail])).code).toBe(2);
+    const two = await runCli([...single, '--app', APP, '--integration', INT, ...singleTail]);
+    expect(two.code).toBe(2);
+    expect(two.stderr).toMatch(/exactly one of --app, --integration, --endpoint/);
+  });
+
+  it('--app must be a UUID (exit 2)', async () => {
+    expect((await runCli([...single, '--app', 'not-a-uuid', ...singleTail])).code).toBe(2);
+  });
+
+  it('single-turn needs at least one --pack and --validator (exit 2)', async () => {
+    const r = await runCli([
+      'redteam',
+      'attack',
+      '--single-turn',
+      '--technique',
+      't1',
+      '--app',
+      APP,
+    ]);
+    expect(r.code).toBe(2);
+  });
+
+  const multi = ['redteam', 'attack', '--multi-turn', '--technique', 't1', '--prompt', 'obj-1'];
+  const batchBody = (): Record<string, unknown> =>
+    JSON.parse(
+      findLast((r) => r.url === '/api/v1/mr-jailbreak/batch-automate')?.body ?? '{}',
+    ) as Record<string, unknown>;
+
+  it('multi-turn --integration sends top-level app_integration_id and no template', async () => {
+    const result = await runCli([...multi, '--integration', INT, '--poll-interval', '0.01']);
+    expect(result.code).toBe(0);
+    const body = batchBody();
+    expect(body['app_integration_id']).toBe(INT);
+    expect(body).not.toHaveProperty('app_integration_template');
+    expect(body['jailbreak_config']).not.toHaveProperty('application_id');
+  });
+
+  it('multi-turn --app sends jailbreak_config.application_id and no template', async () => {
+    const result = await runCli([...multi, '--app', APP, '--poll-interval', '0.01']);
+    expect(result.code).toBe(0);
+    const body = batchBody();
+    expect(body).not.toHaveProperty('app_integration_template');
+    expect(body).not.toHaveProperty('app_integration_id');
+    expect(body['jailbreak_config']).toMatchObject({ application_id: APP, max_depth: 5 });
+  });
+
+  it('multi-turn --endpoint takes the legacy template as a JSON literal', async () => {
+    const tpl = {
+      name: 'lit',
+      base_url: 'https://t.example',
+      integration_type: 'single-step',
+      send_step: { api_endpoint: 'https://t.example/chat' },
+    };
+    const result = await runCli([
+      ...multi,
+      '--endpoint',
+      JSON.stringify(tpl),
+      '--poll-interval',
+      '0.01',
+    ]);
+    expect(result.code).toBe(0);
+    expect(batchBody()['app_integration_template']).toEqual(tpl);
+  });
+
+  it('multi-turn --target @file loads the template', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'disseqt-tpl-'));
+    const path = join(dir, 't.json');
+    const tpl = { name: 'f', base_url: 'b', integration_type: 'i', send_step: {} };
+    writeFileSync(path, JSON.stringify(tpl), 'utf-8');
+    const result = await runCli([...multi, '--target', `@${path}`, '--poll-interval', '0.01']);
+    expect(result.code).toBe(0);
+    expect(batchBody()['app_integration_template']).toEqual(tpl);
+  });
+
+  it('multi-turn template missing required keys exits 2', async () => {
+    const result = await runCli([...multi, '--endpoint', '{"name":"x"}']);
+    expect(result.code).toBe(2);
+    expect(result.stderr).toMatch(/missing/);
+  });
+
+  it('vuln-test --app sends application_id', async () => {
+    const result = await runCli(['redteam', 'vuln-test', '--vulnerability', 'v1', '--app', APP], {
+      DISSEQT_ORGANIZATION_ID: 'org-1',
+    });
+    expect(result.code).toBe(0);
+    expect(JSON.parse(requests.at(-1)?.body ?? '{}')).toEqual({ application_id: APP });
+  });
+
+  it('vuln-test --endpoint is not supported (exit 2)', async () => {
+    const result = await runCli([
+      'redteam',
+      'vuln-test',
+      '--vulnerability',
+      'v1',
+      '--endpoint',
+      'https://t.example',
+    ]);
+    expect(result.code).toBe(2);
+  });
+
+  it('run create <packId> --app merges application_id into the body', async () => {
+    const result = await runCli(['run', 'create', 'pk1', '--app', APP]);
+    expect(result.code).toBe(0);
+    const req = requests.at(-1);
+    expect(req?.url).toBe('/api/v1/sdk/prompt-packs/pk1/runs');
+    expect(JSON.parse(req?.body ?? '{}')).toEqual({ application_id: APP });
+  });
+
+  it('run create <packId> --integration + --body merges into the body', async () => {
+    const result = await runCli([
+      'run',
+      'create',
+      'pk1',
+      '--integration',
+      INT,
+      '--body',
+      '{"prompt_pack_run_name":"n"}',
+    ]);
+    expect(result.code).toBe(0);
+    expect(JSON.parse(requests.at(-1)?.body ?? '{}')).toEqual({
+      prompt_pack_run_name: 'n',
+      app_integration_id: INT,
+    });
+  });
+
+  it('run create <packId> with neither --body nor a target exits 2', async () => {
+    expect((await runCli(['run', 'create', 'pk1'])).code).toBe(2);
+  });
+
+  it('plan-run create --integration builds an app_integration target', async () => {
+    const result = await runCli(['plan-run', 'create', 'pl1', '--integration', INT]);
+    expect(result.code).toBe(0);
+    expect(JSON.parse(requests.at(-1)?.body ?? '{}')).toEqual({
+      target: { execution_mode: 'app_integration', app_integration_id: INT },
+    });
+  });
+
+  it('plan-run create --endpoint builds a direct target', async () => {
+    const result = await runCli(['plan-run', 'create', 'pl1', '--endpoint', 'https://t.example']);
+    expect(result.code).toBe(0);
+    expect(JSON.parse(requests.at(-1)?.body ?? '{}')).toEqual({
+      target: { execution_mode: 'direct', endpoint_url: 'https://t.example' },
+    });
+  });
+
+  it('plan-run create --app sends target.application_id', async () => {
+    const result = await runCli(['plan-run', 'create', 'pl1', '--app', APP]);
+    expect(result.code).toBe(0);
+    expect(JSON.parse(requests.at(-1)?.body ?? '{}')).toEqual({
+      target: { execution_mode: 'app_integration', application_id: APP },
+    });
+  });
+});
+
+describe('disseqt app', () => {
+  it('app list GETs policy-mgmt /api/v1/applications on DISSEQT_POLICIES_BASE_URL', async () => {
+    const result = await runCli(['app', 'list', '--json'], { DISSEQT_POLICIES_BASE_URL: baseUrl });
+    expect(result.code).toBe(0);
+    expect(requests.at(-1)?.method).toBe('GET');
+    expect(requests.at(-1)?.url).toBe('/api/v1/applications');
+    expect(JSON.parse(result.stdout)).toEqual({
+      applications: [{ id: APP, name: 'support-bot' }],
+      count: 1,
+    });
+  });
+
+  it('app link POSTs an app_integration link', async () => {
+    const result = await runCli(['app', 'link', APP, '--integration', INT]);
+    expect(result.code).toBe(0);
+    const req = requests.at(-1);
+    expect(req?.method).toBe('POST');
+    expect(req?.url).toBe('/api/v1/llm/application-links');
+    expect(JSON.parse(req?.body ?? '{}')).toEqual({
+      application_id: APP,
+      integration_type: 'app_integration',
+      integration_id: INT,
+    });
+  });
+
+  it('app link without --integration exits 2', async () => {
+    expect((await runCli(['app', 'link', APP])).code).toBe(2);
+  });
+
+  it('app unlink lists the links then DELETEs each', async () => {
+    const before = requests.length;
+    const result = await runCli(['app', 'unlink', APP]);
+    expect(result.code).toBe(0);
+    const seen = requests.slice(before).map((r) => `${r.method ?? ''} ${r.url ?? ''}`);
+    expect(seen).toEqual([
+      `GET /api/v1/llm/application-links?application_id=${APP}`,
+      'DELETE /api/v1/llm/application-links/link-1',
+    ]);
   });
 });

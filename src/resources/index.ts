@@ -1,3 +1,4 @@
+export * from './applications.js';
 export * from './base.js';
 export * from './client.js';
 export * from './customValidators.js';

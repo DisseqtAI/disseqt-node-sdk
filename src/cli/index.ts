@@ -3,6 +3,7 @@ import { Command } from 'commander';
 import { SDK_VERSION } from '../version.js';
 import { registerAuth } from './auth.js';
 import {
+  registerApp,
   registerBonus,
   registerPack,
   registerPlan,
@@ -34,6 +35,7 @@ registerScan(program);
 registerPlan(program);
 registerPlanRun(program);
 registerRedteam(program);
+registerApp(program);
 
 program.parseAsync(process.argv).catch((error: unknown) => {
   const msg = error instanceof Error ? error.message : String(error);

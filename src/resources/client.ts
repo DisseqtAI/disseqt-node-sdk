@@ -5,6 +5,11 @@ import {
   type DisseqtHttpTransportConfig,
   stripTrailingSlashes,
 } from '../http/index.js';
+import {
+  ApplicationLinksClient,
+  ApplicationsClient,
+  POLICIES_DEFAULT_BASE_URL,
+} from './applications.js';
 import { CustomValidatorsClient } from './customValidators.js';
 import { McpTargetsClient, RagTargetsClient, VulnerabilitiesClient } from './misc.js';
 import { PacksClient } from './packs.js';
@@ -32,6 +37,8 @@ export interface DisseqtIdentity {
 export type DisseqtResourceClientConfig = Omit<ResourceClientConfig, 'apiKey' | 'projectId'> & {
   apiKey?: string;
   projectId?: string;
+  /** policy-mgmt base for `applications` (default env `DISSEQT_POLICIES_BASE_URL`, then production). */
+  policiesBaseUrl?: string;
 };
 
 /**
@@ -57,6 +64,8 @@ export class DisseqtResourceClient {
   readonly plans: PlansClient;
   readonly planRuns: PlanRunsClient;
   readonly redteam: RedteamClient;
+  readonly applications: ApplicationsClient;
+  readonly applicationLinks: ApplicationLinksClient;
 
   constructor(config: DisseqtResourceClientConfig = {}) {
     const overrides: Parameters<typeof resolveAuthSync>[0] = {};
@@ -86,6 +95,15 @@ export class DisseqtResourceClient {
     this.plans = new PlansClient(shared);
     this.planRuns = new PlanRunsClient(shared);
     this.redteam = new RedteamClient(shared);
+    this.applicationLinks = new ApplicationLinksClient(shared);
+    const policiesBase =
+      config.policiesBaseUrl ??
+      process.env['DISSEQT_POLICIES_BASE_URL'] ??
+      POLICIES_DEFAULT_BASE_URL;
+    this.applications = new ApplicationsClient({
+      transport: this.transport,
+      baseUrl: policiesBase,
+    });
   }
 
   /**
@@ -117,5 +135,4 @@ export class DisseqtResourceClient {
   }
 }
 
-const strOrNull = (v: unknown): string | null =>
-  typeof v === 'string' && v.length > 0 ? v : null;
+const strOrNull = (v: unknown): string | null => (typeof v === 'string' && v.length > 0 ? v : null);

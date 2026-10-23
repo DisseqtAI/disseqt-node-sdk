@@ -1,8 +1,18 @@
 import type { Command } from 'commander';
 
 import { PACK_SHARING_SCOPES, type PackSharingScope } from '../resources/packs.js';
+import type { JsonObject } from '../http/types.js';
+import { vulnScope, vulnTestBody } from './commands/redteam.js';
 import { buildClient, emit, EXIT_USAGE, pollUntilTerminal, runAction } from './config.js';
 import { readBody } from './parse.js';
+import {
+  planRunTarget,
+  resolveTarget,
+  targetFields,
+  targetOptions,
+  usage,
+  type TargetFlags,
+} from './target.js';
 
 // ponytail: single file for every command group. Splitting per-group buys us
 // nothing until any one group actually grows past ~50 lines.
@@ -15,6 +25,19 @@ interface CommonOpts {
 const commonJson = (cmd: Command): Command => cmd.option('--json', 'emit JSON output', false);
 const commonWait = (cmd: Command): Command =>
   cmd.option('--wait', 'poll until terminal status', false);
+
+/** `--body` (optional) merged with an optional target flag; exits 2 when both are absent. */
+const bodyWithTarget = (
+  opts: TargetFlags & { body?: string },
+  merge: (body: JsonObject, target: NonNullable<ReturnType<typeof resolveTarget>>) => JsonObject,
+): JsonObject => {
+  const target = resolveTarget(opts, 'single', false);
+  if (target === null && opts.body === undefined) {
+    usage('pass --body or one of --app, --integration, --endpoint');
+  }
+  const body = opts.body !== undefined ? (readBody(opts.body) as JsonObject) : {};
+  return target === null ? body : merge(body, target);
+};
 
 /** target group */
 export function registerTarget(program: Command): void {
@@ -182,29 +205,30 @@ export function registerRun(program: Command): void {
       await runAction(async () => emit(await buildClient().runs.get(runId), opts.json === true));
     }),
   );
-  commonJson(
-    commonWait(
-      cmd
-        .command('create <packId>')
-        .requiredOption('--body <json|file|->', 'request body')
-        .action(async (packId: string, opts: CommonOpts & { body: string }) => {
-          await runAction(async () => {
-            const c = buildClient();
-            const created = await c.runs.create(packId, readBody(opts.body) as never);
-            if (opts.wait !== true) {
-              emit(created, opts.json === true);
-              return;
-            }
-            const runId = String(created['id'] ?? created['run_id'] ?? '');
-            if (runId.length === 0) {
-              throw new Error(`could not resolve run id from response: ${JSON.stringify(created)}`);
-            }
-            const final = await pollUntilTerminal(() => c.runs.get(runId));
-            emit(final, opts.json === true);
-          });
-        }),
-    ),
-  );
+  targetOptions(
+    cmd
+      .command('create <packId>')
+      .option('--body <json|file|->', 'request body (a target flag is merged in at top level)'),
+  )
+    .option('--wait', 'poll until terminal status', false)
+    .option('--json', 'emit JSON output', false)
+    .action(async (packId: string, opts: CommonOpts & TargetFlags & { body?: string }) => {
+      const body = bodyWithTarget(opts, (b, t) => ({ ...b, ...targetFields(t) }));
+      await runAction(async () => {
+        const c = buildClient();
+        const created = await c.runs.create(packId, body);
+        if (opts.wait !== true) {
+          emit(created, opts.json === true);
+          return;
+        }
+        const runId = String(created['id'] ?? created['run_id'] ?? '');
+        if (runId.length === 0) {
+          throw new Error(`could not resolve run id from response: ${JSON.stringify(created)}`);
+        }
+        const final = await pollUntilTerminal(() => c.runs.get(runId));
+        emit(final, opts.json === true);
+      });
+    });
   commonJson(
     cmd.command('cancel <runId>').action(async (runId: string, opts: CommonOpts) => {
       await runAction(async () => emit(await buildClient().runs.cancel(runId), opts.json === true));
@@ -462,45 +486,37 @@ export function registerBonus(program: Command): void {
       );
     }),
   );
-  commonJson(
+  targetOptions(
     v
       .command('test <id>')
       .description('POST /api/v1/vulnerabilities/{id}/test — fire and forget')
-      .option('--target <id>', 'app integration id (sent as app_integration_id)')
-      .option('--body <json|file|->', 'raw VulnerabilityTestRequest body (overrides --target)')
-      .option(
-        '--organization-id <id>',
-        'organization scope (query param; default env DISSEQT_ORGANIZATION_ID)',
-      )
-      .action(
-        async (
-          id: string,
-          opts: CommonOpts & { target?: string; body?: string; organizationId?: string },
-        ) => {
-          const orgId = opts.organizationId ?? process.env['DISSEQT_ORGANIZATION_ID'] ?? '';
-          if (orgId.length === 0) {
-            process.stderr.write('error: pass --organization-id or set DISSEQT_ORGANIZATION_ID\n');
-            process.exit(EXIT_USAGE);
-          }
-          const body =
-            opts.body !== undefined
-              ? (readBody(opts.body) as never)
-              : opts.target !== undefined
-                ? ({ app_integration_id: opts.target } as never)
-                : undefined;
-          await runAction(async () => {
-            const c = buildClient();
-            emit(
-              await c.vulnerabilities.test(id, body, {
-                project_id: c.transport.projectId,
-                organization_id: orgId,
-              }),
-              opts.json === true,
-            );
-          });
-        },
-      ),
-  );
+      .option('--body <json|file|->', 'raw VulnerabilityTestRequest body (overrides target flags)'),
+    'deprecated alias of --integration',
+  )
+    .option('--llm-config <json|file|->', 'llm_config object instead of a target')
+    .option('--organization-id <id>', 'organization scope (default env DISSEQT_ORGANIZATION_ID)')
+    .option('--json', 'emit JSON output', false)
+    .action(
+      async (
+        id: string,
+        opts: CommonOpts &
+          TargetFlags & { body?: string; llmConfig?: string; organizationId?: string },
+      ) => {
+        const body =
+          opts.body !== undefined ? (readBody(opts.body) as JsonObject) : vulnTestBody(opts);
+        await runAction(async () => {
+          const c = buildClient();
+          emit(
+            await c.vulnerabilities.test(
+              id,
+              body,
+              vulnScope(c.transport.projectId, opts.organizationId),
+            ),
+            opts.json === true,
+          );
+        });
+      },
+    );
 
   // NOTE: the `mr` group (previously list/get/create) was removed alongside
   // MultiTurnClient — none of its routes existed on the backend. The real
@@ -654,29 +670,33 @@ export function registerPlan(program: Command): void {
 export function registerPlanRun(program: Command): void {
   const cmd = program.command('plan-run').description('test plan runs (T6)');
 
-  commonJson(
-    commonWait(
-      cmd
-        .command('create <planId>')
-        .requiredOption('--body <json|file|->', 'target + optional version_id')
-        .action(async (planId: string, opts: CommonOpts & { body: string }) => {
-          await runAction(async () => {
-            const c = buildClient();
-            const created = await c.planRuns.create(planId, readBody(opts.body) as never);
-            if (opts.wait !== true) {
-              emit(created, opts.json === true);
-              return;
-            }
-            const runId = String(created['run_id'] ?? created['id'] ?? '');
-            if (runId.length === 0) {
-              throw new Error(`could not resolve run id from response: ${JSON.stringify(created)}`);
-            }
-            const final = await pollUntilTerminal(() => c.planRuns.get(runId));
-            emit(final, opts.json === true);
-          });
-        }),
-    ),
-  );
+  targetOptions(
+    cmd
+      .command('create <planId>')
+      .option(
+        '--body <json|file|->',
+        'target + optional version_id (a target flag sets body.target)',
+      ),
+  )
+    .option('--wait', 'poll until terminal status', false)
+    .option('--json', 'emit JSON output', false)
+    .action(async (planId: string, opts: CommonOpts & TargetFlags & { body?: string }) => {
+      const body = bodyWithTarget(opts, (b, t) => ({ ...b, target: planRunTarget(t) }));
+      await runAction(async () => {
+        const c = buildClient();
+        const created = await c.planRuns.create(planId, body);
+        if (opts.wait !== true) {
+          emit(created, opts.json === true);
+          return;
+        }
+        const runId = String(created['run_id'] ?? created['id'] ?? '');
+        if (runId.length === 0) {
+          throw new Error(`could not resolve run id from response: ${JSON.stringify(created)}`);
+        }
+        const final = await pollUntilTerminal(() => c.planRuns.get(runId));
+        emit(final, opts.json === true);
+      });
+    });
   commonJson(
     cmd.command('list <planId>').action(async (planId: string, opts: CommonOpts) => {
       await runAction(async () =>
@@ -763,6 +783,58 @@ export function registerPlanRun(program: Command): void {
         await runAction(async () =>
           emit(await buildClient().planRuns.reveal(runId, resultId), opts.json === true),
         );
+      }),
+  );
+}
+
+/** app group — AI Systems (policy-mgmt registry) and their integration links. */
+export function registerApp(program: Command): void {
+  const cmd = program.command('app').description('AI Systems (applications) and integration links');
+
+  commonJson(
+    cmd
+      .command('list')
+      .description('list AI Systems (policy-mgmt GET /api/v1/applications)')
+      .action(async (opts: CommonOpts) => {
+        await runAction(async () =>
+          emit(await buildClient().applications.list(), opts.json === true),
+        );
+      }),
+  );
+  commonJson(
+    cmd
+      .command('link <applicationId>')
+      .description('link an app integration to an AI System')
+      .option('--integration <app_integration_id>', 'app integration id to link (required)')
+      .option('--role <role>', 'primary | fallback | candidate | staging (server default: primary)')
+      .action(
+        async (
+          applicationId: string,
+          opts: CommonOpts & { integration?: string; role?: string },
+        ) => {
+          const integrationId =
+            opts.integration ?? usage('app link needs --integration <app_integration_id>');
+          await runAction(async () =>
+            emit(
+              await buildClient().applicationLinks.create(applicationId, integrationId, opts.role),
+              opts.json === true,
+            ),
+          );
+        },
+      ),
+  );
+  commonJson(
+    cmd
+      .command('unlink <applicationId>')
+      .description('remove every integration link of an AI System')
+      .action(async (applicationId: string, opts: CommonOpts) => {
+        await runAction(async () => {
+          const deleted = await buildClient().applicationLinks.unlinkAll(applicationId);
+          if (deleted.length === 0) {
+            throw new Error(`AI System ${applicationId} has no linked integration`);
+          }
+          emit({ application_id: applicationId, deleted }, opts.json === true);
+        });
       }),
   );
 }
