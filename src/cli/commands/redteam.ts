@@ -19,12 +19,8 @@ import {
   warnTargetDeprecated,
 } from '../target.js';
 
-// Request bodies mirror the Go structs in disseqt-dataset-backend:
-//   api/testing_types.go            CreateTestingSessionRequest / CreateTestingRunRequest
-//   pkg/testing/pipeline.go         TestingPlanConfig
-//   api/mr_jailbreak_batch_automation.go  BatchAutomateJailbreakRequest
-//   api/testing_bot_types.go + testing_bot_handlers.go  bot helpers
-//   api/vulnerability_types.go      VulnerabilityTestRequest
+// Bodies mirror dataset-backend Go structs (api/testing_types.go, pkg/testing/pipeline.go,
+// api/mr_jailbreak_batch_automation.go, api/testing_bot_*.go, api/vulnerability_types.go).
 
 interface CommonOpts {
   json?: boolean;
@@ -77,6 +73,13 @@ const expandEnv = (value: unknown): unknown => {
     );
   }
   return value;
+};
+
+// NaN here would make the poller spin with no deadline.
+const secondsToMs = (flag: string, value: string): number => {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) usage(`${flag} must be a positive number (got "${value}")`);
+  return Math.round(n * 1000);
 };
 
 const isObject = (v: unknown): v is JsonObject =>
@@ -280,9 +283,7 @@ export function registerRedteam(program: Command): void {
     .command('redteam')
     .description('run red-team attacks (single-turn, multi-turn, vuln tests)');
 
-  // -------------------------------------------------------------------
-  // list-attacks / list-techniques / list-personas
-  // -------------------------------------------------------------------
+  // --- list-attacks / list-techniques / list-personas ---
 
   cmd
     .command('list-attacks')
@@ -349,9 +350,7 @@ export function registerRedteam(program: Command): void {
       });
     });
 
-  // -------------------------------------------------------------------
-  // attack — end-to-end single- or multi-turn
-  // -------------------------------------------------------------------
+  // --- attack — end-to-end single- or multi-turn ---
 
   cmd
     .command('attack')
@@ -402,8 +401,8 @@ export function registerRedteam(program: Command): void {
         if ((opts.singleTurn === true) === (opts.multiTurn === true)) {
           usage('pass exactly one of --single-turn or --multi-turn');
         }
-        const pollMs = Math.round(Number(opts.pollInterval) * 1000);
-        const maxMs = Math.round(Number(opts.maxWait) * 1000);
+        const pollMs = secondsToMs('--poll-interval', opts.pollInterval);
+        const maxMs = secondsToMs('--max-wait', opts.maxWait);
 
         if (opts.multiTurn === true) {
           if (opts.prompt.length === 0 || opts.prompt.length > MAX_TARGET_PROMPTS) {
@@ -499,9 +498,7 @@ export function registerRedteam(program: Command): void {
       },
     );
 
-  // -------------------------------------------------------------------
-  // session list / get
-  // -------------------------------------------------------------------
+  // --- session list / get ---
 
   const sessionCmd = cmd.command('session').description('inspect red-team sessions');
   pageOptions(sessionCmd.command('list')).action(async (opts: PageOpts) => {
@@ -514,9 +511,7 @@ export function registerRedteam(program: Command): void {
     await runAction(async () => emit(await rt().getSession(sessionId), true));
   });
 
-  // -------------------------------------------------------------------
-  // vuln-test — POST /api/v1/vulnerabilities/{id}/test/poll
-  // -------------------------------------------------------------------
+  // --- vuln-test — POST /api/v1/vulnerabilities/{id}/test/poll ---
 
   targetOptions(
     cmd
@@ -546,9 +541,7 @@ export function registerRedteam(program: Command): void {
       },
     );
 
-  // -------------------------------------------------------------------
-  // run [config.yaml] — end-to-end suite from YAML
-  // -------------------------------------------------------------------
+  // --- run [config.yaml] — end-to-end suite from YAML ---
 
   cmd
     .command('run [configPath]')
@@ -598,9 +591,7 @@ export function registerRedteam(program: Command): void {
       });
     });
 
-  // -------------------------------------------------------------------
-  // validate — POST /api/v1/testing/validate
-  // -------------------------------------------------------------------
+  // --- validate — POST /api/v1/testing/validate ---
 
   cmd
     .command('validate')
@@ -635,9 +626,7 @@ export function registerRedteam(program: Command): void {
       },
     );
 
-  // -------------------------------------------------------------------
-  // status / cancel / results — job ops
-  // -------------------------------------------------------------------
+  // --- status / cancel / results — job ops ---
 
   cmd
     .command('status <jobId>')
@@ -677,9 +666,7 @@ export function registerRedteam(program: Command): void {
     });
   });
 
-  // -------------------------------------------------------------------
-  // report [runId] --format {json,csv,markdown} [--session <id>]
-  // -------------------------------------------------------------------
+  // --- report [runId] --format {json,csv,markdown} [--session <id>] ---
 
   cmd
     .command('report [runId]')
@@ -721,9 +708,7 @@ export function registerRedteam(program: Command): void {
       });
     });
 
-  // -------------------------------------------------------------------
-  // analytics
-  // -------------------------------------------------------------------
+  // --- analytics ---
 
   cmd
     .command('analytics')
@@ -766,9 +751,7 @@ export function registerRedteam(program: Command): void {
       });
     });
 
-  // -------------------------------------------------------------------
-  // recommend {packs,attacks,validators}
-  // -------------------------------------------------------------------
+  // --- recommend {packs,attacks,validators} ---
 
   cmd
     .command('recommend <kind>')
@@ -803,9 +786,7 @@ export function registerRedteam(program: Command): void {
       },
     );
 
-  // -------------------------------------------------------------------
-  // parse-curl [source] --stdin
-  // -------------------------------------------------------------------
+  // --- parse-curl [source] --stdin ---
 
   cmd
     .command('parse-curl [source]')
@@ -825,9 +806,7 @@ export function registerRedteam(program: Command): void {
       await runAction(async () => emit(await rt().parseCurl(curl), true));
     });
 
-  // -------------------------------------------------------------------
-  // test-connection
-  // -------------------------------------------------------------------
+  // --- test-connection ---
 
   cmd
     .command('test-connection')

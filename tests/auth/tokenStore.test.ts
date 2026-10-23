@@ -49,6 +49,16 @@ describe('tokenStore.save', () => {
     expect(parsed.auth.project_id).toBe('proj_1');
   });
 
+  it('tightens an existing wider file to 0o600 before writing the key', async () => {
+    if (platform() === 'win32') return;
+    mkdirSync(tokenStore.configDir(), { recursive: true, mode: 0o755 });
+    writeFileSync(tokenStore.configPath(), '{}', { mode: 0o644 });
+    chmodSync(tokenStore.configDir(), 0o755);
+    await tokenStore.save({ apiKey: 'fake_apikey' });
+    expect(statSync(tokenStore.configPath()).mode & 0o777).toBe(0o600);
+    expect(statSync(tokenStore.configDir()).mode & 0o777).toBe(0o700);
+  });
+
   it('round-trips through load', async () => {
     await tokenStore.save({
       apiKey: 'fake_apikey',

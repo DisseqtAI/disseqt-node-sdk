@@ -1,4 +1,5 @@
 import type { Command } from 'commander';
+import { existsSync } from 'node:fs';
 import { createInterface, type Interface as ReadlineInterface } from 'node:readline';
 
 import { AuthMissingError } from '../auth/errors.js';
@@ -85,8 +86,8 @@ async function runLogin(opts: LoginOpts): Promise<void> {
 
 async function runLogout(opts: LogoutOpts): Promise<void> {
   try {
-    const stored = tokenStore.loadSync();
-    if (stored === null) {
+    // Existence only: a corrupt or over-permissive file must still be removable.
+    if (!existsSync(tokenStore.configPath())) {
       process.stdout.write('already logged out (no config file)\n');
       process.exit(EXIT_OK);
     }
@@ -139,15 +140,7 @@ interface MutableReadline extends ReadlineInterface {
   _writeToOutput?: (chunk: string) => void;
 }
 
-/**
- * Read a line without echoing. `readline.question` doesn't natively hide
- * input; the standard trick (override the internal `_writeToOutput` hook
- * while reading) works without an extra dep.
- *
- * ponytail: single-shot mute via `_writeToOutput` override — good enough
- * for a one-time login prompt. If we ever need general password entry,
- * swap in a dedicated prompt lib (e.g. `@inquirer/password`).
- */
+// ponytail: mutes echo via readline's internal `_writeToOutput`; use a prompt lib if this grows.
 function promptSecret(rl: ReadlineInterface, prompt: string): Promise<string> {
   return new Promise((resolve) => {
     const mutable = rl as MutableReadline;
@@ -210,9 +203,9 @@ function emitSuccess(apiKey: string, projectId: string | undefined, json: boolea
   process.stdout.write(`logged in as ${masked}${scope}\n`);
 }
 
+// At most 8 chars and never more than half the key, so short keys are not echoed whole.
 function maskedPrefix(apiKey: string): string {
-  const head = apiKey.slice(0, Math.min(KEY_PREFIX_LEN, apiKey.length));
-  return `${head}${head.length === apiKey.length ? '' : '…'}`;
+  return `${apiKey.slice(0, Math.min(KEY_PREFIX_LEN, Math.floor(apiKey.length / 2)))}…`;
 }
 
 class UsageError extends Error {

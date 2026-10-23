@@ -705,6 +705,19 @@ describe('target selection (--app / --integration / --endpoint)', () => {
       requests.slice(before).find((r) => r.url === '/api/v1/testing/sessions')?.body ?? '{}',
     ) as Record<string, unknown>;
 
+  it('rejects a non-numeric --poll-interval / --max-wait with exit 2 before any request', async () => {
+    const before = requests.length;
+    for (const bad of [
+      ['--poll-interval', 'abc', '--max-wait', '5'],
+      ['--poll-interval', '0.01', '--max-wait', '-1'],
+    ]) {
+      const result = await runCli([...single, '--integration', INT, '--validator', 'v1', ...bad]);
+      expect(result.code).toBe(2);
+      expect(result.stderr).toMatch(/--(poll-interval|max-wait) must be a positive number/);
+    }
+    expect(requests.length).toBe(before);
+  });
+
   it('single-turn --integration → target_config.app_integration_id', async () => {
     const before = requests.length;
     const result = await runCli([...single, '--integration', INT, ...singleTail]);

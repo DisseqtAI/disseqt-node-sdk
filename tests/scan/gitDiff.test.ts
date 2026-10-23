@@ -32,6 +32,22 @@ describe('gitDiff', () => {
     expect(() => parseDiffRange('nope')).toThrow(GitDiffError);
   });
 
+  it('rejects refs that would be parsed as git options', () => {
+    expect(() => parseDiffRange('--output=/tmp/x..HEAD')).toThrow(GitDiffError);
+    expect(() => parseDiffRange('main..-p')).toThrow(GitDiffError);
+  });
+
+  it('keeps three-dot (merge-base) semantics when invoking git', async () => {
+    let seen: unknown[] = [];
+    const inner = makeSpawner('', 0);
+    const spawner = (...args: unknown[]): EventEmitter => {
+      seen = args;
+      return inner();
+    };
+    await changedFiles('main...HEAD', '/repo', spawner as never);
+    expect((seen[1] as string[]).at(-1)).toBe('main...HEAD');
+  });
+
   it('changedFiles maps stdout lines to absolute paths under cwd', async () => {
     const spawner = makeSpawner('src/a.ts\nsrc/b.ts\n\n', 0);
     const files = await changedFiles('main..HEAD', '/repo', spawner as never);

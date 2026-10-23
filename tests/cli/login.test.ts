@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process';
 import { createServer, type Server } from 'node:http';
-import { mkdtempSync, readFileSync, rmSync, existsSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, existsSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
@@ -176,6 +176,13 @@ describe('disseqt login', () => {
     expect(result.stderr).not.toContain(secret);
   });
 
+  it('never prints a short key in full', async () => {
+    const secret = 'k3y12345';
+    const result = await runCli(['login', '--api-key', secret, '--base-url', baseUrl, '--json']);
+    expect(result.code).toBe(0);
+    expect(result.stdout).not.toContain(secret);
+  });
+
   it('accepts --api-key alone: no X-Project-Id sent, no project_id stored', async () => {
     const result = await runCli([
       'login',
@@ -225,6 +232,15 @@ describe('disseqt logout', () => {
     expect(result.code).toBe(0);
     expect(result.stdout).not.toContain('--local-only');
     expect(result.stdout).toContain('local');
+  });
+
+  it('clears a corrupt or over-permissive config file', async () => {
+    const dir = join(configHome, '.disseqt');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, 'config.json'), '{not json', { mode: 0o644 });
+    const result = await runCli(['logout']);
+    expect(result.code).toBe(0);
+    expect(existsSync(join(dir, 'config.json'))).toBe(false);
   });
 
   it('is a no-op message when already logged out', async () => {

@@ -2,6 +2,7 @@ import {
   accessSync,
   chmodSync,
   constants,
+  existsSync,
   mkdirSync,
   readFileSync,
   statSync,
@@ -33,15 +34,7 @@ export function configPath(): string {
   return join(configDir(), CONFIG_FILE_NAME);
 }
 
-/**
- * Read stored auth if present. Returns `null` when the file does not
- * exist (never-logged-in is a normal state, not an error). Throws
- * `AuthConfigPermissionError` if the file is readable but wider than
- * 0o600 — a world-readable API key is a security incident.
- *
- * Windows has no meaningful POSIX mode, so we skip the permission check
- * there (fs.stat().mode returns cosmetic values on NTFS).
- */
+/** Stored auth, or null when absent; throws `AuthConfigPermissionError` if wider than 0o600 (skipped on Windows). */
 export async function load(): Promise<StoredAuth | null> {
   return loadSync();
 }
@@ -79,15 +72,15 @@ export function loadSync(): StoredAuth | null {
   return out;
 }
 
-/**
- * Persist auth atomically-ish: mkdir 0o700, write 0o600. We deliberately
- * do NOT use write-then-rename — the file is small, single-writer (the
- * CLI), and a partial write on crash leaves the same "corrupt config"
- * failure mode as a partial rename. Simpler wins.
- */
+/** Write `~/.disseqt/config.json` (dir 0o700, file 0o600); existing wider modes are tightened first. */
 export async function save(auth: StoredAuth): Promise<void> {
   const dir = configDir();
   mkdirSync(dir, { recursive: true, mode: 0o700 });
+  // `mode` only applies on create, so tighten pre-existing paths before the key lands.
+  if (platform() !== 'win32') {
+    chmodSync(dir, 0o700);
+    if (existsSync(configPath())) chmodSync(configPath(), 0o600);
+  }
   const payload = {
     auth: {
       api_key: auth.apiKey,
@@ -98,8 +91,6 @@ export async function save(auth: StoredAuth): Promise<void> {
   writeFileSync(configPath(), `${JSON.stringify(payload, null, 2)}\n`, {
     mode: 0o600,
   });
-  // `mode` only applies on create; an existing wider file keeps its bits.
-  if (platform() !== 'win32') chmodSync(configPath(), 0o600);
 }
 
 function isNodeError(v: unknown): v is Error & { code: string } {

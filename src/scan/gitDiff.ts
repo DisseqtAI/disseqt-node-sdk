@@ -17,6 +17,8 @@ export function parseDiffRange(spec: string): [string, string] {
     if (idx >= 0) {
       const base = spec.slice(0, idx).trim();
       const head = spec.slice(idx + sep.length).trim();
+      // A leading '-' would reach git as an option (e.g. --output=<file>).
+      if (base.startsWith('-') || head.startsWith('-')) break;
       if (base.length > 0 && head.length > 0) return [base, head];
     }
   }
@@ -34,7 +36,8 @@ export async function changedFiles(
   spawner: Spawner = spawn,
 ): Promise<string[]> {
   const [base, head] = parseDiffRange(spec);
-  const args = ['diff', '--name-only', '--diff-filter=ACMRT', `${base}..${head}`];
+  const range = `${base}${spec.includes('...') ? '...' : '..'}${head}`;
+  const args = ['diff', '--name-only', '--diff-filter=ACMRT', range];
   return await new Promise<string[]>((resolve, reject) => {
     let child;
     try {
@@ -52,15 +55,11 @@ export async function changedFiles(
         reject(new GitDiffError('git is not installed or not on PATH', { cause: error }));
         return;
       }
-      reject(
-        new GitDiffError(`git diff ${base}..${head} failed: ${error.message}`, { cause: error }),
-      );
+      reject(new GitDiffError(`git diff ${range} failed: ${error.message}`, { cause: error }));
     });
     child.on('close', (code: number | null) => {
       if (code !== 0) {
-        reject(
-          new GitDiffError(`git diff ${base}..${head} failed: ${stderr.trim() || `exit ${code}`}`),
-        );
+        reject(new GitDiffError(`git diff ${range} failed: ${stderr.trim() || `exit ${code}`}`));
         return;
       }
       const files = stdout
