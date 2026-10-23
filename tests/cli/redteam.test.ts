@@ -247,8 +247,8 @@ describe('disseqt redteam CLI', () => {
     expect(seen[0]).toBe('/api/v1/whoami');
     // The mock whoami has no project_id, so no batch is sent.
     expect(seen).not.toContain('/api/v1/mr-jailbreak/batch-automate');
-    expect(result.code).toBe(1);
-    expect(result.stderr).toContain('project id');
+    expect(result.code).toBe(2);
+    expect(result.stderr).toContain('DISSEQT_PROJECT_ID');
   });
 
   it('list-techniques --single-turn hits only single-turn', async () => {
@@ -429,13 +429,29 @@ describe('disseqt redteam CLI', () => {
     expect(JSON.parse(req?.body ?? '{}')).toEqual({ app_integration_id: 'int-1' });
   });
 
-  it('vuln-test without an organization id omits it (the gateway scopes the org)', async () => {
+  it('vuln-test without an organization id asks whoami, and exits 2 if still unknown', async () => {
+    const before = requests.length;
     const result = await runCli(
       ['redteam', 'vuln-test', '--vulnerability', 'v1', '--integration', INT],
       { DISSEQT_ORGANIZATION_ID: '' },
     );
+    // Go's vulnerabilityTestOrgProjectGate requires both query params.
+    expect(requests.slice(before).map((r) => r.url)).toEqual(['/api/v1/whoami']);
+    expect(result.code).toBe(2);
+    expect(result.stderr).toContain('DISSEQT_ORGANIZATION_ID');
+  });
+
+  it('vuln-test takes project and organization from whoami when not configured', async () => {
+    responseMap['/api/v1/whoami'] = { project_id: 'wp', organization_id: 'wo', user_id: 'u' };
+    const result = await runCli(
+      ['redteam', 'vuln-test', '--vulnerability', 'v1', '--integration', INT],
+      { DISSEQT_ORGANIZATION_ID: '', DISSEQT_PROJECT_ID: '' },
+    );
+    Reflect.deleteProperty(responseMap, '/api/v1/whoami');
     expect(result.code).toBe(0);
-    expect(requests.at(-1)?.url).toBe('/api/v1/vulnerabilities/v1/test/poll?project_id=p');
+    expect(requests.at(-1)?.url).toBe(
+      '/api/v1/vulnerabilities/v1/test/poll?project_id=wp&organization_id=wo',
+    );
   });
 
   it('validate POSTs the standard body shape', async () => {
@@ -695,6 +711,23 @@ describe('disseqt redteam CLI', () => {
       trigger_metadata: { source: 'disseqt-cli' },
     });
     expect(result.stderr).not.toContain('deprecated');
+  });
+
+  it('run <config.yaml> exits 2 on an unset ${VAR} or a target without exactly one id', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'disseqt-yaml-'));
+    const cases = [
+      ['target:', '  application_id: ${DISSEQT_TEST_UNSET_VAR}'],
+      ['target:', '  name: no-id'],
+      ['target:', `  application_id: ${APP}`, `  app_integration_id: ${INT}`],
+    ];
+    const before = requests.length;
+    for (const [i, lines] of cases.entries()) {
+      const path = join(dir, `bad-${i}.yaml`);
+      writeFileSync(path, ['name: x', ...lines, ''].join('\n'), 'utf-8');
+      const result = await runCli(['redteam', 'run', path]);
+      expect(result.code).toBe(2);
+    }
+    expect(requests.length).toBe(before);
   });
 
   it('run <config.yaml> still accepts the old packs/application_context/target_config keys', async () => {
@@ -1018,7 +1051,7 @@ describe('polling interrupts', () => {
     expect(result.stderr).toContain('disseqt redteam status test-id');
   });
 
-  it('Ctrl-C (SIGINT) while polling cancels the run and exits 1', async () => {
+  it('Ctrl-C (SIGINT) while polling cancels the run and exits 130', async () => {
     responseMap[RUN] = { id: 'test-id', status: 'running' };
     const before = requests.length;
     const child = spawn(process.execPath, [CLI, ...attack, '--max-wait', '30'], {
@@ -1041,7 +1074,7 @@ describe('polling interrupts', () => {
       child.on('close', (c) => resolve(c));
     });
     Reflect.deleteProperty(responseMap, RUN);
-    expect(code).toBe(1);
+    expect(code).toBe(130);
     expect(cancelled(before)).toBe(true);
     expect(stderr).toContain('interrupted');
     expect(stderr).toContain('disseqt redteam status test-id');

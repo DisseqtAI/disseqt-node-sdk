@@ -7,7 +7,15 @@ import type { RedteamClient, RedteamValidateRequest } from '../../resources/redt
 import { DisseqtHttpError } from '../../http/errors.js';
 import type { JsonObject, JsonValue, QueryParams } from '../../http/types.js';
 import { readBody } from '../parse.js';
-import { buildClient, emit, pollUntilTerminal, runAction } from '../config.js';
+import {
+  buildClient,
+  emit,
+  pollUntilTerminal,
+  requireId,
+  runAction,
+  scopeIds,
+  type ScopeIds,
+} from '../config.js';
 import {
   requireTarget,
   resolveTarget,
@@ -62,9 +70,13 @@ const readYamlFile = (path: string): JsonObject => {
   return parsed as JsonObject;
 };
 
+// An unset `${VAR}` is a usage error (exit 2), never a silent empty string.
 const expandEnv = (value: unknown): unknown => {
   if (typeof value === 'string') {
-    return value.replace(/\$\{([A-Z0-9_]+)\}/gi, (_, name: string) => process.env[name] ?? '');
+    return value.replace(
+      /\$\{([A-Z0-9_]+)\}/gi,
+      (_, name: string) => process.env[name] ?? usage(`\${${name}} is not set`),
+    );
   }
   if (Array.isArray(value)) return value.map(expandEnv);
   if (value !== null && typeof value === 'object') {
@@ -81,6 +93,8 @@ const secondsToMs = (flag: string, value: string): number => {
   if (!Number.isFinite(n) || n <= 0) usage(`${flag} must be a positive number (got "${value}")`);
   return Math.round(n * 1000);
 };
+
+const YAML_TARGET_KEYS = ['application_id', 'app_integration_id', 'endpoint_url'];
 
 const isObject = (v: unknown): v is JsonObject =>
   v !== null && typeof v === 'object' && !Array.isArray(v);
@@ -266,17 +280,11 @@ export const vulnTestBody = (opts: TargetFlags & { llmConfig?: string }): JsonOb
   return targetFields(target);
 };
 
-/** Query scope for the vuln-test routes; both ids are optional (the gateway injects them). */
-export const vulnScope = (
-  projectId: string | undefined,
-  organizationId: string | undefined,
-): Record<string, string> => {
-  const orgId = organizationId ?? process.env['DISSEQT_ORGANIZATION_ID'] ?? '';
-  return {
-    ...(projectId !== undefined ? { project_id: projectId } : {}),
-    ...(orgId.length > 0 ? { organization_id: orgId } : {}),
-  };
-};
+/** `?project_id&organization_id`: both required by Go's vulnerabilityTestOrgProjectGate. */
+export const vulnScope = (ids: ScopeIds): Record<string, string> => ({
+  project_id: requireId(ids.projectId, 'DISSEQT_PROJECT_ID'),
+  organization_id: requireId(ids.organizationId, 'DISSEQT_ORGANIZATION_ID'),
+});
 
 export function registerRedteam(program: Command): void {
   const cmd = program
@@ -411,13 +419,9 @@ export function registerRedteam(program: Command): void {
           const appName = opts.appName ?? (typeof tplName === 'string' ? tplName : opts.name);
           await runAction(async () => {
             const client = buildClient();
-            // JailbreakJobConfig.project_id is `binding:"required"`; derive it from the key if unset.
-            const projectId = client.transport.projectId ?? (await client.whoami()).project_id;
-            if (projectId === null) {
-              throw new Error(
-                'multi-turn needs a project id: set DISSEQT_PROJECT_ID or `disseqt login --project-id`',
-              );
-            }
+            // JailbreakJobConfig.project_id is `binding:"required"`.
+            const ids = await scopeIds(client, { needOrg: false });
+            const projectId = requireId(ids.projectId, 'DISSEQT_PROJECT_ID');
             const picked = multiTurnTarget(target, {
               project_id: projectId,
               job_name_prefix: opts.name,
@@ -533,7 +537,9 @@ export function registerRedteam(program: Command): void {
             await client.vulnerabilities.testPoll(
               opts.vulnerability,
               body,
-              vulnScope(client.transport.projectId, opts.organizationId),
+              vulnScope(
+                await scopeIds(client, { organizationId: opts.organizationId, needOrg: true }),
+              ),
             ),
             true,
           );
@@ -559,10 +565,12 @@ export function registerRedteam(program: Command): void {
         const application = pickKey(config, 'application', 'application_context');
         const asList = (v: unknown): string[] => (Array.isArray(v) ? v.map(String) : []);
         const name = String(config['name'] ?? `cli-run-${Date.now()}`);
+        const ids = isObject(target) ? YAML_TARGET_KEYS.filter((k) => Boolean(target[k])) : [];
+        if (ids.length !== 1) usage(`target: needs exactly one of ${YAML_TARGET_KEYS.join(', ')}`);
         const sessionBody = buildSessionBody(
           name,
           isObject(application) ? application : {},
-          isObject(target) ? target : {},
+          target as JsonObject,
           isObject(config['testing_plan'])
             ? config['testing_plan']
             : buildTestingPlan({

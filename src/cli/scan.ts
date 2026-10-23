@@ -3,7 +3,7 @@
 import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
-import { DisseqtHttpTransport } from '../http/index.js';
+import { DisseqtAuthError } from '../auth/errors.js';
 import type { Command } from 'commander';
 import {
   APPSEC_VALIDATORS,
@@ -30,7 +30,15 @@ import {
   type ScanScope,
   type ScanTransport,
 } from '../scan/index.js';
-import { EXIT_FAILED, EXIT_OK, EXIT_USAGE } from './config.js';
+import {
+  buildClient,
+  CliUsageError,
+  EXIT_FAILED,
+  EXIT_OK,
+  EXIT_USAGE,
+  requireId,
+  scopeIds,
+} from './config.js';
 
 const SEVERITY_CHOICES = ['low', 'medium', 'high', 'critical'] as const;
 const FORMAT_CHOICES = ['json', 'sarif', 'markdown'] as const;
@@ -79,31 +87,27 @@ function shouldShowProgress(fmt: string, hasOutputPath: boolean): boolean {
   return process.stderr.isTTY === true;
 }
 
-function buildTransport(): { transport: ScanTransport; baseUrl: string; scope: ScanScope } {
-  const apiKey = process.env['DISSEQT_API_KEY'];
-  const projectId = process.env['DISSEQT_PROJECT_ID'];
-  const organizationId = process.env['DISSEQT_ORGANIZATION_ID'];
-  const baseUrl = process.env[BASE_ENV] ?? DEFAULT_BASE;
-
-  if (apiKey === undefined || apiKey.trim().length === 0) {
-    process.stderr.write('error: DISSEQT_API_KEY is not set\n');
-    process.exit(EXIT_USAGE);
-  }
-  if (projectId === undefined || projectId.trim().length === 0) {
-    process.stderr.write('error: DISSEQT_PROJECT_ID is not set\n');
-    process.exit(EXIT_USAGE);
-  }
-  // The judge route binds organization_id as required (billing scope).
-  if (organizationId === undefined || organizationId.trim().length === 0) {
-    process.stderr.write('error: DISSEQT_ORGANIZATION_ID is not set\n');
-    process.exit(EXIT_USAGE);
-  }
-  const http = new DisseqtHttpTransport({ apiKey, projectId });
-  return {
-    transport: makeDefaultTransport(http, baseUrl),
-    baseUrl,
-    scope: { projectId: projectId.trim(), organizationId: organizationId.trim() },
+/** Credentials via the shared chain (args > env > config); missing project/org come from whoami. */
+async function buildTransport(): Promise<{ transport: ScanTransport; scope: ScanScope }> {
+  const client = buildClient();
+  // The judge route binds project_id and organization_id as required (billing scope).
+  const ids = await scopeIds(client, { needOrg: true });
+  const scope = {
+    projectId: requireId(ids.projectId, 'DISSEQT_PROJECT_ID'),
+    organizationId: requireId(ids.organizationId, 'DISSEQT_ORGANIZATION_ID'),
   };
+  const baseUrl = process.env[BASE_ENV] ?? DEFAULT_BASE;
+  return { transport: makeDefaultTransport(client.transport, baseUrl), scope };
+}
+
+/** Write the rendered report to `--output` or stdout. */
+async function writeReport(findings: CodeFinding[], fmt: string, output?: string): Promise<void> {
+  const report = render(findings, fmt);
+  if (output !== undefined && output.length > 0) {
+    await writeFile(output, report, 'utf-8');
+  } else {
+    process.stdout.write(report.endsWith('\n') ? report : `${report}\n`);
+  }
 }
 
 async function runScan(scanPath: string, opts: ScanOpts): Promise<never> {
@@ -162,7 +166,8 @@ async function runScan(scanPath: string, opts: ScanOpts): Promise<never> {
       process.exit(EXIT_USAGE);
     }
     if (only.length === 0) {
-      process.stdout.write('# disseqt scan\n\nNo changed files in diff range.\n');
+      process.stderr.write('no changed files in diff range\n');
+      await writeReport([], fmt, opts.output);
       process.exit(EXIT_OK);
     }
   }
@@ -176,11 +181,20 @@ async function runScan(scanPath: string, opts: ScanOpts): Promise<never> {
   const chunks: CodeChunk[] = [];
   for await (const c of collectChunks(root, collectOpts)) chunks.push(c);
   if (chunks.length === 0) {
-    process.stdout.write('# disseqt scan\n\nNo source files matched (nothing to do).\n');
+    process.stderr.write('No source files matched (nothing to do).\n');
+    await writeReport([], fmt, opts.output);
     process.exit(EXIT_OK);
   }
 
-  const { transport, scope } = buildTransport();
+  let built: Awaited<ReturnType<typeof buildTransport>>;
+  try {
+    built = await buildTransport();
+  } catch (error) {
+    process.stderr.write(`error: ${error instanceof Error ? error.message : String(error)}\n`);
+    const usageLike = error instanceof CliUsageError || error instanceof DisseqtAuthError;
+    process.exit(usageLike ? EXIT_USAGE : EXIT_FAILED);
+  }
+  const { transport, scope } = built;
   const stats = newDispatchStats();
   const showProgress = shouldShowProgress(fmt, opts.output !== undefined);
 
@@ -200,12 +214,7 @@ async function runScan(scanPath: string, opts: ScanOpts): Promise<never> {
     if (meetsMinSeverity(f.severity, effectiveMin)) findings.push(f);
   }
 
-  const report = render(findings, fmt);
-  if (opts.output !== undefined && opts.output.length > 0) {
-    await writeFile(opts.output, report, 'utf-8');
-  } else {
-    process.stdout.write(report.endsWith('\n') ? report : `${report}\n`);
-  }
+  await writeReport(findings, fmt, opts.output);
 
   const fileCount = new Set(chunks.map((c) => c.file_path)).size;
   process.stderr.write(

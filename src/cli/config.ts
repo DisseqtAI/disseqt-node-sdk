@@ -1,10 +1,17 @@
-import { AuthMissingError } from '../auth/errors.js';
+import { AuthMissingError, DisseqtAuthError } from '../auth/errors.js';
 import { DisseqtHttpError } from '../http/errors.js';
 import { DisseqtResourceClient } from '../resources/index.js';
 
 export const EXIT_OK = 0;
 export const EXIT_FAILED = 1;
 export const EXIT_USAGE = 2;
+export const EXIT_INTERRUPTED = 130;
+
+/** Bad input or missing identity discovered inside an action: exit 2. */
+export class CliUsageError extends Error {}
+
+/** Ctrl-C while polling: exit 130 like a shell-killed process. */
+class InterruptedError extends Error {}
 
 /** Resolve credentials via `DisseqtResourceClient`'s chain (env > `~/.disseqt/config.json`); exits 2 when none. */
 export function buildClient(): DisseqtResourceClient {
@@ -15,6 +22,10 @@ export function buildClient(): DisseqtResourceClient {
       process.stderr.write(
         'error: DISSEQT_API_KEY not set and no ~/.disseqt/config.json — run `disseqt login`\n',
       );
+      process.exit(EXIT_USAGE);
+    }
+    if (error instanceof DisseqtAuthError) {
+      process.stderr.write(`error: ${error.message}\n`);
       process.exit(EXIT_USAGE);
     }
     throw error;
@@ -49,8 +60,40 @@ export async function runAction(fn: () => Promise<void>): Promise<void> {
     }
     const msg = error instanceof Error ? error.message : String(error);
     process.stderr.write(`error: ${msg}\n`);
-    process.exit(EXIT_FAILED);
+    if (error instanceof InterruptedError) process.exit(EXIT_INTERRUPTED);
+    const usageLike = error instanceof CliUsageError || error instanceof DisseqtAuthError;
+    process.exit(usageLike ? EXIT_USAGE : EXIT_FAILED);
   }
+}
+
+export interface ScopeIds {
+  projectId: string | null;
+  organizationId: string | null;
+}
+
+/** Project/org ids from config/env/flag, asking `whoami()` only for what is still missing. */
+export async function scopeIds(
+  client: DisseqtResourceClient,
+  opts: { organizationId?: string | undefined; needOrg: boolean },
+): Promise<ScopeIds> {
+  const envOrg = process.env['DISSEQT_ORGANIZATION_ID']?.trim();
+  let projectId = client.transport.projectId ?? null;
+  let organizationId =
+    opts.organizationId ?? (envOrg !== undefined && envOrg !== '' ? envOrg : null);
+  if (projectId === null || (opts.needOrg && organizationId === null)) {
+    const who = await client.whoami();
+    projectId ??= who.project_id;
+    organizationId ??= who.organization_id;
+  }
+  return { projectId, organizationId };
+}
+
+/** Throw a usage error naming the env var that would supply a missing id. */
+export function requireId(value: string | null, envVar: string): string {
+  if (value === null) {
+    throw new CliUsageError(`${envVar} is not set and \`disseqt whoami\` could not supply it`);
+  }
+  return value;
 }
 
 /** Run states that end polling (testing runs, pack/plan runs, mr-jailbreak jobs). */
@@ -147,5 +190,6 @@ async function giveUp(reason: string, options: PollOptions): Promise<never> {
   }
   const hint =
     options.statusCommand !== undefined ? `; inspect with \`${options.statusCommand}\`` : '';
-  throw new Error(`${reason}; ${outcome}${hint}`);
+  const message = `${reason}; ${outcome}${hint}`;
+  throw reason.startsWith('interrupted') ? new InterruptedError(message) : new Error(message);
 }

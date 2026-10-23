@@ -183,6 +183,21 @@ describe('disseqt login', () => {
     expect(result.stdout).not.toContain(secret);
   });
 
+  it('smoke-tests against a previously stored base_url when no flag or env is given', async () => {
+    const dir = join(configHome, '.disseqt');
+    mkdirSync(dir, { recursive: true, mode: 0o700 });
+    writeFileSync(
+      join(dir, 'config.json'),
+      JSON.stringify({ auth: { api_key: 'old', base_url: baseUrl } }),
+      { mode: 0o600 },
+    );
+    const result = await runCli(['login', '--api-key', 'fake_apikey_999'], {
+      DISSEQT_BASE_URL: '',
+    });
+    expect(result.code).toBe(0);
+    expect(requests.at(-1)?.url).toBe('/api/v1/testing/attack-techniques');
+  });
+
   it('accepts --api-key alone: no X-Project-Id sent, no project_id stored', async () => {
     const result = await runCli([
       'login',
@@ -266,6 +281,15 @@ describe('disseqt whoami', () => {
     const out = JSON.parse(result.stdout) as Record<string, unknown>;
     expect(out).toMatchObject({ project_id: 'p1', organization_id: 'o1', user_id: 'u1' });
     expect(result.stdout).not.toContain(secret);
+  });
+
+  it('exits 2 when the config file is wider than 0600', async () => {
+    const dir = join(configHome, '.disseqt');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, 'config.json'), '{"auth":{"api_key":"k"}}', { mode: 0o644 });
+    const result = await runCli(['whoami'], { DISSEQT_BASE_URL: baseUrl });
+    expect(result.code).toBe(2);
+    expect(result.stderr).toContain('chmod 600');
   });
 
   it('exits 2 with no credentials', async () => {

@@ -27,8 +27,11 @@
   `validator`, `plan`, `plan-run`, `vulnerability`, `app`, ...).
 - Red-team target flags: exactly one of `--app`, `--integration`, `--endpoint`
   (`--target` is a deprecated alias); zero or several exit 2.
-- Pollers stop on any terminal status (including `stopped`); Ctrl-C or
-  `--max-wait` cancels the run where a cancel route exists and exits 1.
+- Pollers stop on any terminal status (including `stopped`); Ctrl-C (exit 130)
+  or `--max-wait` (exit 1) cancels the run where a cancel route exists.
+- Exit codes: 2 for usage and auth problems (including an over-permissive
+  config file, an unset `${VAR}` in `redteam run` YAML, or a YAML `target`
+  without exactly one id), 1 for API failures.
 - `DisseqtResourceClient` (`targets`, `packs`, `runs`, `validations`,
   `sessions`, `customValidators`, `ragTargets`, `mcpTargets`,
   `vulnerabilities`, `plans`, `planRuns`, `redteam`, `applications`,
@@ -36,9 +39,12 @@
   It unwraps the `{status, data}` envelope (opt-in per request, so `Client` and
   `DisseqtAPIClient` responses are unchanged) and throws the new
   `DisseqtApiError` on a 2xx `{status:"error"}`.
-- Credential resolution: constructor args > `DISSEQT_API_KEY` /
-  `DISSEQT_PROJECT_ID` > `~/.disseqt/config.json` (dir 0700, file 0600; wider
-  files are refused). Same file format as the Python SDK.
+- Credential resolution (CLI, `scan` and constructors): args > `DISSEQT_API_KEY`
+  / `DISSEQT_PROJECT_ID` > `~/.disseqt/config.json` (dir 0700, file 0600; wider
+  files are refused). Unless passed explicitly, the project id comes from the key's own source;
+  a stored `base_url` applies unless `DISSEQT_BASE_URL` is set. Same file
+  format as the Python SDK. Project / organization ids that routes require
+  but are not configured are taken from `whoami()`.
 - `BaseAttack`, `BaseSingleTurnAttack`, `BaseMultiTurnAttack`, `BaseMetric`,
   `BaseVulnerability`, `BaseLLM` extension classes (Python parity).
 - `DisseqtAgenticClient({ applicationId })` sends `X-Application-Id`

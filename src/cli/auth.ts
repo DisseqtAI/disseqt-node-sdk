@@ -2,7 +2,8 @@ import type { Command } from 'commander';
 import { existsSync } from 'node:fs';
 import { createInterface, type Interface as ReadlineInterface } from 'node:readline';
 
-import { AuthMissingError } from '../auth/errors.js';
+import { DisseqtAuthError } from '../auth/errors.js';
+import { resolveBaseUrl } from '../auth/resolve.js';
 import * as tokenStore from '../auth/tokenStore.js';
 import type { StoredAuth } from '../auth/types.js';
 import { DisseqtHttpError } from '../http/errors.js';
@@ -68,7 +69,7 @@ async function runLogin(opts: LoginOpts): Promise<void> {
   try {
     const auth = await collectCredentials(opts);
     const baseUrl = stripTrailingSlashes(
-      opts.baseUrl ?? process.env['DISSEQT_BASE_URL'] ?? RESOURCES_DEFAULT_BASE_URL,
+      resolveBaseUrl(opts.baseUrl) ?? RESOURCES_DEFAULT_BASE_URL,
     );
     await verify(auth, baseUrl);
     const stored: StoredAuth = { apiKey: auth.apiKey };
@@ -231,7 +232,7 @@ function handleAuthError(error: unknown): never {
     process.stderr.write(`error: ${error.message}\n`);
     process.exit(2);
   }
-  if (error instanceof AuthMissingError) {
+  if (error instanceof DisseqtAuthError) {
     process.stderr.write(`error: ${error.message}\n`);
     process.exit(EXIT_USAGE);
   }

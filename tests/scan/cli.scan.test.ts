@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { createServer, type Server } from 'node:http';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -91,6 +91,7 @@ const runCli = (
         DISSEQT_PROJECT_ID: 'p',
         DISSEQT_ORGANIZATION_ID: 'org-1',
         DISSEQT_VALIDATORS_BASE_URL: baseUrl,
+        DISSEQT_BASE_URL: baseUrl,
         DISSEQT_SHOW_PROGRESS: '0',
         ...env,
       },
@@ -147,7 +148,8 @@ describe('disseqt scan CLI', () => {
     const result = await runCli(['scan', tmp], tmp, { DISSEQT_ORGANIZATION_ID: '' });
     expect(result.code).toBe(2);
     expect(result.stderr).toContain('DISSEQT_ORGANIZATION_ID');
-    expect(requests.length - before).toBe(0);
+    // Only the whoami lookup; no validator call.
+    expect(requests.slice(before).map((r) => r.url)).toEqual(['/api/v1/whoami']);
   });
 
   it('exits 1 with no findings when the judge reports 402 inside an HTTP 200', async () => {
@@ -190,11 +192,49 @@ describe('disseqt scan CLI', () => {
     expect(requests.length - before).toBe(1);
   });
 
+  it('emits a valid empty json / sarif report when there is nothing to scan', async () => {
+    const tmp = await mkdtemp(path.join(tmpdir(), 'scan-cli-'));
+    const json = await runCli(['scan', tmp, '--format', 'json'], tmp);
+    expect(json.code).toBe(0);
+    expect(JSON.parse(json.stdout)).toMatchObject({ count: 0, findings: [] });
+    const sarif = await runCli(['scan', tmp, '--format', 'sarif'], tmp);
+    expect(sarif.code).toBe(0);
+    expect((JSON.parse(sarif.stdout) as { version: string }).version).toBe('2.1.0');
+  });
+
+  it('reads credentials from ~/.disseqt/config.json like every other command', async () => {
+    const tmp = await mkdtemp(path.join(tmpdir(), 'scan-cli-'));
+    await writeFile(path.join(tmp, 'a.py'), 'code = 1\n');
+    const home = await mkdtemp(path.join(tmpdir(), 'scan-home-'));
+    await mkdir(path.join(home, '.disseqt'), { mode: 0o700 });
+    await writeFile(
+      path.join(home, '.disseqt', 'config.json'),
+      JSON.stringify({ auth: { api_key: 'cfg-key', project_id: 'cp' } }),
+      { mode: 0o600 },
+    );
+    const before = requests.length;
+    const result = await runCli(
+      ['scan', tmp, '--validator', 'bfla', '--no-fail-on-findings'],
+      tmp,
+      {
+        DISSEQT_API_KEY: '',
+        DISSEQT_PROJECT_ID: '',
+        DISSEQT_CONFIG_HOME: home,
+      },
+    );
+    expect(result.code).toBe(0);
+    const hit = requests.slice(before).find((r) => r.url?.includes('llm-judge-bfla'));
+    expect(JSON.parse(hit?.body ?? '{}')).toMatchObject({
+      project_id: 'cp',
+      organization_id: 'org-1',
+    });
+  });
+
   it('exits 0 when no source files match', async () => {
     const tmp = await mkdtemp(path.join(tmpdir(), 'scan-cli-'));
     await writeFile(path.join(tmp, 'readme.txt'), 'not source\n');
     const result = await runCli(['scan', tmp, '--validator', 'sql-injection'], tmp);
     expect(result.code).toBe(0);
-    expect(result.stdout).toContain('No source files matched');
+    expect(result.stderr).toContain('No source files matched');
   });
 });

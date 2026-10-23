@@ -58,6 +58,17 @@ describe('resolveAuthSync', () => {
     });
   });
 
+  it('an explicit key is never paired with an env project id', () => {
+    process.env['DISSEQT_PROJECT_ID'] = 'env-proj';
+    expect(resolveAuthSync({ apiKey: 'arg' })).toEqual({ apiKey: 'arg' });
+  });
+
+  it('reads the stored base_url even when the key comes from env', async () => {
+    await tokenStore.save({ apiKey: 'stored-key', baseUrl: 'https://stored.example' });
+    process.env['DISSEQT_API_KEY'] = 'env-key';
+    expect(resolveAuthSync()).toEqual({ apiKey: 'env-key', baseUrl: 'https://stored.example' });
+  });
+
   it('throws AuthMissingError without any API key', () => {
     process.env['DISSEQT_PROJECT_ID'] = 'p';
     expect(() => resolveAuthSync()).toThrow(AuthMissingError);

@@ -1,5 +1,6 @@
 import { AuthMissingError } from './errors.js';
 import { loadSync } from './tokenStore.js';
+import type { StoredAuth } from './types.js';
 
 /** Credential precedence (Python parity): args > `DISSEQT_*` env > `~/.disseqt/config.json`.
  *  Only the API key is required; the server derives the project from it. */
@@ -25,13 +26,25 @@ export function resolveAuthSync(overrides: AuthOverrides = {}): ResolvedAuth {
   const stored = source === null ? loadSync() : null;
   const keySource = source ?? stored;
   if (keySource?.apiKey === undefined) throw new AuthMissingError();
+  // Identity is a unit: the project only ever comes from args or the key's own source.
   const projectId =
-    explicit.projectId ?? (keySource === explicit ? env.projectId : keySource.projectId);
+    explicit.projectId ?? (keySource === explicit ? undefined : keySource.projectId);
   const out: ResolvedAuth = { apiKey: keySource.apiKey };
   if (projectId !== undefined) out.projectId = projectId;
-  const baseUrl = explicit.baseUrl ?? env.baseUrl ?? stored?.baseUrl;
+  const baseUrl = resolveBaseUrl(explicit.baseUrl, stored);
   if (baseUrl !== undefined) out.baseUrl = baseUrl;
   return out;
+}
+
+/** Base URL: explicit > `DISSEQT_BASE_URL` > stored `base_url` (read even when the key came from env). */
+export function resolveBaseUrl(
+  explicit?: string,
+  stored: StoredAuth | null = null,
+): string | undefined {
+  if (isNonEmpty(explicit)) return explicit;
+  const env = pickEnv().baseUrl;
+  if (env !== undefined) return env;
+  return (stored ?? loadSync())?.baseUrl;
 }
 
 function pick(o: AuthOverrides): AuthOverrides {

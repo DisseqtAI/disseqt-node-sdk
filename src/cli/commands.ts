@@ -3,7 +3,7 @@ import type { Command } from 'commander';
 import { PACK_SHARING_SCOPES, type PackSharingScope } from '../resources/packs.js';
 import type { JsonObject } from '../http/types.js';
 import { vulnScope, vulnTestBody } from './commands/redteam.js';
-import { buildClient, emit, EXIT_USAGE, pollUntilTerminal, runAction } from './config.js';
+import { buildClient, emit, EXIT_USAGE, pollUntilTerminal, runAction, scopeIds } from './config.js';
 import { readBody } from './parse.js';
 import {
   planRunTarget,
@@ -523,7 +523,7 @@ export function registerBonus(program: Command): void {
             await c.vulnerabilities.test(
               id,
               body,
-              vulnScope(c.transport.projectId, opts.organizationId),
+              vulnScope(await scopeIds(c, { organizationId: opts.organizationId, needOrg: true })),
             ),
             opts.json === true,
           );
