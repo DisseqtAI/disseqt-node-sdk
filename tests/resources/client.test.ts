@@ -379,3 +379,15 @@ describe('DisseqtResourceClient identity', () => {
     });
   });
 });
+
+describe('ApplicationsClient base URL', () => {
+  it('defaults to the policy-mgmt gateway https://api.disseqt.ai/policy', async () => {
+    const saved = process.env['DISSEQT_POLICIES_BASE_URL'];
+    Reflect.deleteProperty(process.env, 'DISSEQT_POLICIES_BASE_URL');
+    const fetcher = vi.fn(async () => okJson({ applications: [], count: 0 }));
+    const client = new DisseqtResourceClient({ apiKey: 'k', fetch: fetcher });
+    await client.applications.list();
+    if (saved !== undefined) process.env['DISSEQT_POLICIES_BASE_URL'] = saved;
+    expect(lastCall(fetcher)[0]).toBe('https://api.disseqt.ai/policy/api/v1/applications');
+  });
+});

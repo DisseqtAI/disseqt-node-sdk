@@ -2,7 +2,7 @@ import type { JsonObject, QueryParams } from '../http/types.js';
 import { ResourceBase } from './base.js';
 
 /** policy-management gateway prefix; serves the AI System (application) registry. */
-export const POLICIES_DEFAULT_BASE_URL = 'https://api.disseqt.ai/realtime-policies';
+export const POLICIES_DEFAULT_BASE_URL = 'https://api.disseqt.ai/policy';
 
 /** AI Systems — policy-mgmt `GET /api/v1/applications` → `{applications, count}`. */
 export class ApplicationsClient extends ResourceBase {
