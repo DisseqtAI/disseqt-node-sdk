@@ -373,7 +373,7 @@ export function registerRedteam(program: Command): void {
     .option('--app-name <name>', 'multi-turn app_name (default: template name)')
     .option(
       '--app-description <text>',
-      'multi-turn app_description_short (default: template description)',
+      'multi-turn app_description_short (default: "<app name> (disseqt CLI)")',
     )
     .option('--app-type <type>', 'multi-turn app_type', 'chatbot')
     .option('--max-depth <n>', 'multi-turn max_depth (1..10)', String(DEFAULT_MAX_DEPTH))
