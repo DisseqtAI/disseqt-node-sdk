@@ -341,3 +341,41 @@ describe('PlanRunsClient', () => {
     expect(lastCall(fetcher)[0]).toContain('/api/v1/test-plan-runs/r1/results/res1/reveal');
   });
 });
+
+describe('DisseqtResourceClient identity', () => {
+  it('omits X-Project-Id when no project id is configured', async () => {
+    const fetcher = vi.fn(async () => okJson({ status: 'success', data: {} }));
+    const client = new DisseqtResourceClient({ apiKey: 'key_1', fetch: fetcher });
+    await client.targets.list();
+    const [, init] = lastCall(fetcher);
+    expect(init?.headers as Record<string, string>).not.toHaveProperty('X-Project-Id');
+  });
+
+  it('whoami() reads GET /api/v1/whoami and unwraps the envelope', async () => {
+    const { client, fetcher } = makeClient(() =>
+      okJson({
+        status: 'success',
+        data: { project_id: 'p1', organization_id: 'o1', user_id: 'u1' },
+      }),
+    );
+    expect(await client.whoami()).toEqual({
+      project_id: 'p1',
+      organization_id: 'o1',
+      user_id: 'u1',
+      source: 'server',
+    });
+    const [url, init] = lastCall(fetcher);
+    expect(url).toBe(`${RESOURCES_DEFAULT_BASE_URL}/api/v1/whoami`);
+    expect(init?.method).toBe('GET');
+  });
+
+  it('whoami() falls back to local credentials when the route is missing (404)', async () => {
+    const { client } = makeClient(() => okJson({ error: 'not found' }, 404));
+    expect(await client.whoami()).toEqual({
+      project_id: 'proj_1',
+      organization_id: process.env['DISSEQT_ORGANIZATION_ID'] ?? null,
+      user_id: null,
+      source: 'local',
+    });
+  });
+});

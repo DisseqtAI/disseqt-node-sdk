@@ -5,6 +5,7 @@
  */
 export interface StoredAuth {
   apiKey: string;
-  projectId: string;
+  /** Optional: the API key alone identifies the project. */
+  projectId?: string;
   baseUrl?: string;
 }

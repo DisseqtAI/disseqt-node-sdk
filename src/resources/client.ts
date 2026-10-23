@@ -1,5 +1,6 @@
 import { resolveAuthSync } from '../auth/resolve.js';
 import {
+  DisseqtHttpError,
   DisseqtHttpTransport,
   type DisseqtHttpTransportConfig,
   stripTrailingSlashes,
@@ -16,12 +17,17 @@ import { SessionsClient } from './sessions.js';
 import { TargetsClient } from './targets.js';
 import { ValidationsClient } from './validations.js';
 
+/** Identity the API key resolves to (`whoami()`); `source: 'local'` when the server route is absent. */
+export interface DisseqtIdentity {
+  project_id: string | null;
+  organization_id: string | null;
+  user_id: string | null;
+  source: 'server' | 'local';
+}
+
 /**
- * Constructor config for `DisseqtResourceClient`. `apiKey` / `projectId`
- * are optional — when omitted, they resolve from `~/.disseqt/config.json`
- * (written by `disseqt login`) and then from `DISSEQT_API_KEY` /
- * `DISSEQT_PROJECT_ID`. `AuthMissingError` fires only when every source
- * comes up empty.
+ * Constructor config for `DisseqtResourceClient`. Omitted credentials resolve from
+ * `DISSEQT_API_KEY` / `DISSEQT_PROJECT_ID`, then `~/.disseqt/config.json`. Only the key is required.
  */
 export type DisseqtResourceClientConfig = Omit<ResourceClientConfig, 'apiKey' | 'projectId'> & {
   apiKey?: string;
@@ -61,11 +67,8 @@ export class DisseqtResourceClient {
     this.baseUrl = stripTrailingSlashes(resolved.baseUrl ?? RESOURCES_DEFAULT_BASE_URL);
     const timeoutMs =
       config.timeoutMs ?? (config.timeout === undefined ? 30_000 : config.timeout * 1000);
-    const transportConfig: DisseqtHttpTransportConfig = {
-      apiKey: resolved.apiKey,
-      projectId: resolved.projectId,
-      timeoutMs,
-    };
+    const transportConfig: DisseqtHttpTransportConfig = { apiKey: resolved.apiKey, timeoutMs };
+    if (resolved.projectId !== undefined) transportConfig.projectId = resolved.projectId;
     if (config.fetch !== undefined) {
       transportConfig.fetch = config.fetch;
     }
@@ -84,4 +87,35 @@ export class DisseqtResourceClient {
     this.planRuns = new PlanRunsClient(shared);
     this.redteam = new RedteamClient(shared);
   }
+
+  /**
+   * GET /api/v1/whoami — the project/org/user the gateway derives from the API key.
+   * Falls back to locally configured values (`source: 'local'`) while the route 404s.
+   */
+  async whoami(): Promise<DisseqtIdentity> {
+    try {
+      const data = await this.transport.requestJson({
+        method: 'GET',
+        url: `${this.baseUrl}/api/v1/whoami`,
+        unwrapEnvelope: true,
+      });
+      return {
+        project_id: strOrNull(data['project_id']),
+        organization_id: strOrNull(data['organization_id']),
+        user_id: strOrNull(data['user_id']),
+        source: 'server',
+      };
+    } catch (error) {
+      if (!(error instanceof DisseqtHttpError) || error.statusCode !== 404) throw error;
+      return {
+        project_id: this.transport.projectId ?? null,
+        organization_id: strOrNull(process.env['DISSEQT_ORGANIZATION_ID']),
+        user_id: null,
+        source: 'local',
+      };
+    }
+  }
 }
+
+const strOrNull = (v: unknown): string | null =>
+  typeof v === 'string' && v.length > 0 ? v : null;

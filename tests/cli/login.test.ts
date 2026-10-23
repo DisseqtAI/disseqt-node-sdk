@@ -176,6 +176,22 @@ describe('disseqt login', () => {
     expect(result.stderr).not.toContain(secret);
   });
 
+  it('accepts --api-key alone: no X-Project-Id sent, no project_id stored', async () => {
+    const result = await runCli([
+      'login',
+      '--api-key',
+      'fake_apikey_12345',
+      '--base-url',
+      baseUrl,
+      '--json',
+    ]);
+    expect(result.code).toBe(0);
+    expect(requests[0]?.headers['x-project-id']).toBeUndefined();
+    const cfg = readConfig();
+    expect(cfg?.auth.api_key).toBe('fake_apikey_12345');
+    expect(cfg?.auth.project_id).toBeUndefined();
+  });
+
   it('errors out when stdin is not a TTY and flags are missing', async () => {
     const result = await runCli(['login', '--base-url', baseUrl]);
     expect(result.code).not.toBe(0);
@@ -215,5 +231,29 @@ describe('disseqt logout', () => {
     const result = await runCli(['logout']);
     expect(result.code).toBe(0);
     expect(result.stdout).toContain('already logged out');
+  });
+});
+
+describe('disseqt whoami', () => {
+  it('prints the server identity with a masked key', async () => {
+    respond = () => ({
+      status: 200,
+      body: { status: 'success', data: { project_id: 'p1', organization_id: 'o1', user_id: 'u1' } },
+    });
+    const secret = 'fake_apikey_12345_XYZ';
+    const result = await runCli(['whoami', '--json'], {
+      DISSEQT_API_KEY: secret,
+      DISSEQT_BASE_URL: baseUrl,
+    });
+    expect(result.code).toBe(0);
+    expect(requests.at(-1)?.url).toBe('/api/v1/whoami');
+    const out = JSON.parse(result.stdout) as Record<string, unknown>;
+    expect(out).toMatchObject({ project_id: 'p1', organization_id: 'o1', user_id: 'u1' });
+    expect(result.stdout).not.toContain(secret);
+  });
+
+  it('exits 2 with no credentials', async () => {
+    const result = await runCli(['whoami'], { DISSEQT_BASE_URL: baseUrl });
+    expect(result.code).toBe(2);
   });
 });

@@ -6,19 +6,14 @@ export const EXIT_OK = 0;
 export const EXIT_FAILED = 1;
 export const EXIT_USAGE = 2;
 
-/**
- * Resolve credentials via `DisseqtResourceClient`'s built-in chain
- * (constructor args → `~/.disseqt/config.json` → `DISSEQT_*` env vars).
- * The two env vars used to be required here; keeping them explicit for
- * back-compat with existing CI setups that only export env vars.
- */
+/** Resolve credentials via `DisseqtResourceClient`'s chain (env > `~/.disseqt/config.json`); exits 2 when none. */
 export function buildClient(): DisseqtResourceClient {
   try {
     return new DisseqtResourceClient({});
   } catch (error) {
     if (error instanceof AuthMissingError) {
       process.stderr.write(
-        'error: DISSEQT_API_KEY / DISSEQT_PROJECT_ID not set and no ~/.disseqt/config.json — run `disseqt login`\n',
+        'error: DISSEQT_API_KEY not set and no ~/.disseqt/config.json — run `disseqt login`\n',
       );
       process.exit(EXIT_USAGE);
     }

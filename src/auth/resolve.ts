@@ -2,11 +2,9 @@ import { AuthMissingError } from './errors.js';
 import { loadSync } from './tokenStore.js';
 
 /**
- * Resolve credentials for the sync client constructors. Order —
- * constructor args always win, then the on-disk config from `disseqt
- * login`, then env vars. `AuthMissingError` only fires when all three
- * sources come up empty. Keeps the constructor sync (fs is sync) so
- * `new Client(...)` stays a one-liner at call sites.
+ * Resolve credentials for the sync client constructors. Precedence matches the
+ * Python SDK: constructor args > `DISSEQT_*` env vars > `~/.disseqt/config.json`.
+ * Only the API key is required; the project id is derived server-side from it.
  */
 export interface AuthOverrides {
   apiKey?: string;
@@ -16,24 +14,27 @@ export interface AuthOverrides {
 
 export interface ResolvedAuth {
   apiKey: string;
-  projectId: string;
+  projectId?: string;
   baseUrl?: string;
 }
 
 export function resolveAuthSync(overrides: AuthOverrides = {}): ResolvedAuth {
   const explicit = pick(overrides);
-  if (explicit.apiKey !== undefined && explicit.projectId !== undefined) {
-    return maybeBase(explicit as ResolvedAuth, overrides.baseUrl);
-  }
-  const stored = loadSync();
   const env = pickEnv();
-  const apiKey = explicit.apiKey ?? stored?.apiKey ?? env.apiKey;
-  const projectId = explicit.projectId ?? stored?.projectId ?? env.projectId;
-  const baseUrl = overrides.baseUrl ?? stored?.baseUrl ?? env.baseUrl;
-  if (apiKey === undefined || projectId === undefined) {
-    throw new AuthMissingError();
-  }
-  return maybeBase({ apiKey, projectId }, baseUrl);
+  // The project id always comes from the same source as the key, so an env key
+  // is never paired with a stored project (that pair would 401).
+  const source = explicit.apiKey !== undefined ? explicit : env.apiKey !== undefined ? env : null;
+  // The stored config is a unit: only read when no key came from args/env.
+  const stored = source === null ? loadSync() : null;
+  const keySource = source ?? stored;
+  if (keySource?.apiKey === undefined) throw new AuthMissingError();
+  const projectId =
+    explicit.projectId ?? (keySource === explicit ? env.projectId : keySource.projectId);
+  const out: ResolvedAuth = { apiKey: keySource.apiKey };
+  if (projectId !== undefined) out.projectId = projectId;
+  const baseUrl = explicit.baseUrl ?? env.baseUrl ?? stored?.baseUrl;
+  if (baseUrl !== undefined) out.baseUrl = baseUrl;
+  return out;
 }
 
 function pick(o: AuthOverrides): AuthOverrides {
@@ -45,19 +46,11 @@ function pick(o: AuthOverrides): AuthOverrides {
 }
 
 function pickEnv(): AuthOverrides {
-  const out: AuthOverrides = {};
-  const k = process.env['DISSEQT_API_KEY'];
-  const p = process.env['DISSEQT_PROJECT_ID'];
-  const b = process.env['DISSEQT_BASE_URL'];
-  if (isNonEmpty(k)) out.apiKey = k;
-  if (isNonEmpty(p)) out.projectId = p;
-  if (isNonEmpty(b)) out.baseUrl = b;
-  return out;
-}
-
-function maybeBase(a: ResolvedAuth, baseUrl: string | undefined): ResolvedAuth {
-  if (isNonEmpty(baseUrl)) return { ...a, baseUrl };
-  return a;
+  return pick({
+    apiKey: process.env['DISSEQT_API_KEY'],
+    projectId: process.env['DISSEQT_PROJECT_ID'],
+    baseUrl: process.env['DISSEQT_BASE_URL'],
+  } as AuthOverrides);
 }
 
 function isNonEmpty(v: string | undefined): v is string {

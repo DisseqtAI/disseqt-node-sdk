@@ -57,7 +57,7 @@ export interface ClientConfig extends Omit<DisseqtHttpTransportConfig, 'apiKey' 
  * Class-based validators are unaffected.
  */
 export class Client {
-  readonly projectId: string;
+  readonly projectId: string | undefined;
   readonly apiKey: string;
   readonly baseUrl: string;
   readonly timeoutMs: number;
@@ -86,9 +86,9 @@ export class Client {
     this.applicationName = applicationName;
     const transportConfig: DisseqtHttpTransportConfig = {
       apiKey: this.apiKey,
-      projectId: this.projectId,
       timeoutMs: this.timeoutMs,
     };
+    if (this.projectId !== undefined) transportConfig.projectId = this.projectId;
     if (config.fetch !== undefined) {
       transportConfig.fetch = config.fetch;
     }

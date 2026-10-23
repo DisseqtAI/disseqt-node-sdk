@@ -8,9 +8,9 @@ import { DisseqtHttpError } from '../http/errors.js';
 import { DisseqtHttpTransport } from '../http/transport.js';
 import { stripTrailingSlashes } from '../http/url.js';
 import { RESOURCES_DEFAULT_BASE_URL } from '../resources/base.js';
-import { EXIT_FAILED, EXIT_OK, EXIT_USAGE } from './config.js';
+import { buildClient, emit, EXIT_FAILED, EXIT_OK, EXIT_USAGE, runAction } from './config.js';
 
-/** Cheap authenticated GET that every project can hit — proves the key + project pair. */
+/** Cheap authenticated GET every project can hit — proves the key (and project, if given). */
 const SMOKE_PATH = '/api/v1/testing/attack-techniques';
 const PROMPT_URL = 'https://app.disseqt.ai/settings/api-keys';
 const KEY_PREFIX_LEN = 8;
@@ -30,9 +30,9 @@ interface LogoutOpts {
 export function registerAuth(program: Command): void {
   program
     .command('login')
-    .description('paste an API key + project id, verify, store to ~/.disseqt/config.json')
+    .description('paste an API key, verify, store to ~/.disseqt/config.json')
     .option('--api-key <key>', 'skip prompt, use this API key')
-    .option('--project-id <id>', 'skip prompt, use this project id')
+    .option('--project-id <id>', 'optional; the API key already identifies its project')
     .option(
       '--base-url <url>',
       'override backend base URL (default: DISSEQT_BASE_URL or production)',
@@ -40,6 +40,18 @@ export function registerAuth(program: Command): void {
     .option('--json', 'emit JSON on success', false)
     .action(async (opts: LoginOpts) => {
       await runLogin(opts);
+    });
+
+  program
+    .command('whoami')
+    .description('show the project / organization / user your API key resolves to')
+    .option('--json', 'emit JSON', false)
+    .action(async (opts: { json?: boolean }) => {
+      await runAction(async () => {
+        const client = buildClient();
+        const identity = await client.whoami();
+        emit({ ...identity, api_key: maskedPrefix(client.transport.apiKey) }, opts.json === true);
+      });
     });
 
   program
@@ -58,7 +70,8 @@ async function runLogin(opts: LoginOpts): Promise<void> {
       opts.baseUrl ?? process.env['DISSEQT_BASE_URL'] ?? RESOURCES_DEFAULT_BASE_URL,
     );
     await verify(auth, baseUrl);
-    const stored: StoredAuth = { apiKey: auth.apiKey, projectId: auth.projectId };
+    const stored: StoredAuth = { apiKey: auth.apiKey };
+    if (auth.projectId !== undefined) stored.projectId = auth.projectId;
     if (opts.baseUrl !== undefined && opts.baseUrl.trim().length > 0) {
       stored.baseUrl = baseUrl;
     }
@@ -90,21 +103,21 @@ async function runLogout(opts: LogoutOpts): Promise<void> {
 }
 
 /** Read from flags first, fall back to interactive stdin. */
-async function collectCredentials(opts: LoginOpts): Promise<{ apiKey: string; projectId: string }> {
+interface LoginCredentials {
+  apiKey: string;
+  projectId?: string;
+}
+
+async function collectCredentials(opts: LoginOpts): Promise<LoginCredentials> {
   const explicitKey = opts.apiKey?.trim();
   const explicitProject = opts.projectId?.trim();
-  if (
-    explicitKey !== undefined &&
-    explicitKey.length > 0 &&
-    explicitProject !== undefined &&
-    explicitProject.length > 0
-  ) {
-    return { apiKey: explicitKey, projectId: explicitProject };
+  if (explicitKey !== undefined && explicitKey.length > 0) {
+    return explicitProject !== undefined && explicitProject.length > 0
+      ? { apiKey: explicitKey, projectId: explicitProject }
+      : { apiKey: explicitKey };
   }
   if (process.stdin.isTTY !== true) {
-    throw new UsageError(
-      'stdin is not a TTY — pass --api-key and --project-id or run interactively',
-    );
+    throw new UsageError('stdin is not a TTY — pass --api-key or run interactively');
   }
   process.stdout.write(`create or copy an API key: ${PROMPT_URL}\n\n`);
   const rl = createInterface({ input: process.stdin, output: process.stdout, terminal: true });
@@ -114,12 +127,8 @@ async function collectCredentials(opts: LoginOpts): Promise<{ apiKey: string; pr
         ? opts.apiKey.trim()
         : await promptSecret(rl, 'API key: ');
     if (apiKey.length === 0) throw new UsageError('API key cannot be empty');
-    const projectId =
-      opts.projectId !== undefined && opts.projectId.trim().length > 0
-        ? opts.projectId.trim()
-        : (await promptLine(rl, 'Project ID: ')).trim();
-    if (projectId.length === 0) throw new UsageError('Project ID cannot be empty');
-    return { apiKey, projectId };
+    const projectId = (await promptLine(rl, 'Project ID (optional, Enter to skip): ')).trim();
+    return projectId.length > 0 ? { apiKey, projectId } : { apiKey };
   } finally {
     rl.close();
   }
@@ -173,17 +182,9 @@ function promptLine(rl: ReadlineInterface, prompt: string): Promise<string> {
   });
 }
 
-/**
- * Hit `GET {baseUrl}/api/v1/testing/attack-techniques` with only
- * `X-API-Key` + `X-Project-Id` (the gateway injects everything else).
- * 200 → pair is good. 401/403 → wrong key or project. Anything else →
- * surface the HTTP error unchanged.
- */
-async function verify(auth: { apiKey: string; projectId: string }, baseUrl: string): Promise<void> {
-  const transport = new DisseqtHttpTransport({
-    apiKey: auth.apiKey,
-    projectId: auth.projectId,
-  });
+/** GET the smoke path with the key (+ project if given): 401/403 → bad credentials. */
+async function verify(auth: LoginCredentials, baseUrl: string): Promise<void> {
+  const transport = new DisseqtHttpTransport(auth);
   try {
     await transport.requestRaw({ method: 'GET', url: `${baseUrl}${SMOKE_PATH}` });
   } catch (error) {
@@ -197,15 +198,16 @@ async function verify(auth: { apiKey: string; projectId: string }, baseUrl: stri
   }
 }
 
-function emitSuccess(apiKey: string, projectId: string, json: boolean): void {
+function emitSuccess(apiKey: string, projectId: string | undefined, json: boolean): void {
   const masked = maskedPrefix(apiKey);
   if (json) {
     process.stdout.write(
-      `${JSON.stringify({ logged_in: true, api_key_prefix: masked, project_id: projectId })}\n`,
+      `${JSON.stringify({ logged_in: true, api_key_prefix: masked, project_id: projectId ?? null })}\n`,
     );
     return;
   }
-  process.stdout.write(`logged in as ${masked} (project ${projectId})\n`);
+  const scope = projectId !== undefined ? ` (project ${projectId})` : '';
+  process.stdout.write(`logged in as ${masked}${scope}\n`);
 }
 
 function maskedPrefix(apiKey: string): string {

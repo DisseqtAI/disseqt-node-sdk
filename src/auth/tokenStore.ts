@@ -71,8 +71,8 @@ export function loadSync(): StoredAuth | null {
   const projectId = auth['project_id'];
   const baseUrl = auth['base_url'];
   if (typeof apiKey !== 'string' || apiKey.length === 0) return null;
-  if (typeof projectId !== 'string' || projectId.length === 0) return null;
-  const out: StoredAuth = { apiKey, projectId };
+  const out: StoredAuth = { apiKey };
+  if (typeof projectId === 'string' && projectId.length > 0) out.projectId = projectId;
   if (typeof baseUrl === 'string' && baseUrl.length > 0) {
     out.baseUrl = baseUrl;
   }
@@ -91,7 +91,7 @@ export async function save(auth: StoredAuth): Promise<void> {
   const payload = {
     auth: {
       api_key: auth.apiKey,
-      project_id: auth.projectId,
+      ...(auth.projectId !== undefined ? { project_id: auth.projectId } : {}),
       ...(auth.baseUrl !== undefined ? { base_url: auth.baseUrl } : {}),
     },
   };

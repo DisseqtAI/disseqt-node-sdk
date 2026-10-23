@@ -83,7 +83,7 @@ describe('tokenStore.load', () => {
 
   it('returns null on a well-formed file with missing fields', async () => {
     mkdirSync(tokenStore.configDir(), { recursive: true, mode: 0o700 });
-    writeFileSync(tokenStore.configPath(), JSON.stringify({ auth: { api_key: 'k' } }), {
+    writeFileSync(tokenStore.configPath(), JSON.stringify({ auth: { project_id: 'p' } }), {
       mode: 0o600,
     });
     expect(await tokenStore.load()).toBeNull();
