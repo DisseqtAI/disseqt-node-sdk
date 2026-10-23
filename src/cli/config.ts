@@ -104,7 +104,9 @@ export async function pollUntilTerminal<T extends Record<string, unknown>>(
     for (;;) {
       const res = await Promise.race([getStatus(), interrupted]);
       if (res === 'interrupted') return await giveUp('interrupted (Ctrl-C)', options);
-      status = String(res['status'] ?? res['state'] ?? '').toLowerCase();
+      // MR jobs nest it: GET /mr-jailbreak/jobs/:id -> {job: {status}, interactions}.
+      const job = res['job'] as Record<string, unknown> | undefined;
+      status = String(res['status'] ?? res['state'] ?? job?.['status'] ?? '').toLowerCase();
       if (TERMINAL_STATUSES.has(status)) return res;
       if (Date.now() >= deadline) {
         const why = `did not finish within ${timeoutMs / 1000}s (last status: "${status || '?'}")`;

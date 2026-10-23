@@ -39,10 +39,23 @@ describe('contract: testing run status', () => {
   it('`stopped` is terminal and stop_reason is modelled', async () => {
     expect(TERMINAL_STATUSES.has('stopped')).toBe(true);
     const run: RedteamRun = testingRunStopped;
-    expect(run.stop_reason).toBe('user_cancelled');
+    expect(run.stop_reason).toBe('user_cancel');
     const probe = vi.fn(async () => testingRunStopped as Record<string, unknown>);
     await expect(pollUntilTerminal(probe, { intervalMs: 1 })).resolves.toMatchObject({
       status: 'stopped',
+    });
+    expect(probe).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('contract: GET /mr-jailbreak/jobs/:id', () => {
+  it('reads status nested under job', async () => {
+    const probe = vi.fn(async () => ({
+      job: { status: 'FAILED', stop_reason: 'max_depth' },
+      interactions: [],
+    }));
+    await expect(pollUntilTerminal(probe, { intervalMs: 1 })).resolves.toMatchObject({
+      job: { status: 'FAILED' },
     });
     expect(probe).toHaveBeenCalledTimes(1);
   });
