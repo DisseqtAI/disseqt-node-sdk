@@ -5,9 +5,9 @@ import { load as yamlLoad } from 'js-yaml';
 
 import type { RedteamClient, RedteamValidateRequest } from '../../resources/redteam.js';
 import { DisseqtHttpError } from '../../http/errors.js';
-import type { JsonObject, JsonValue } from '../../http/types.js';
+import type { JsonObject, JsonValue, QueryParams } from '../../http/types.js';
 import { readBody } from '../parse.js';
-import { buildClient, emit, runAction } from '../config.js';
+import { buildClient, emit, pollUntilTerminal, runAction } from '../config.js';
 import {
   requireTarget,
   resolveTarget,
@@ -36,19 +36,6 @@ const MAX_TARGET_PROMPTS = 10;
 const DEFAULT_MAX_DEPTH = 5;
 // 0 = unlimited (pkg/testing/pipeline.go ExecutionConfig).
 const DEFAULT_MAX_TOTAL_PROMPTS = 0;
-
-const TERMINAL = new Set([
-  'completed',
-  'completed_with_errors',
-  'complete',
-  'failed',
-  'cancelled',
-  'canceled',
-  'error',
-  'errored',
-  'succeeded',
-  'done',
-]);
 
 const resolveId = (payload: unknown, ...keys: string[]): string | null => {
   if (payload === null || typeof payload !== 'object') return null;
@@ -96,29 +83,6 @@ const isObject = (v: unknown): v is JsonObject =>
   v !== null && typeof v === 'object' && !Array.isArray(v);
 
 const collect = (value: string, previous: string[]): string[] => [...previous, value];
-
-const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
-
-/** Poll `probe()` until status ∈ TERMINAL; throws once `maxWaitMs` elapses. */
-const pollUntilTerminal = async <T extends JsonObject>(
-  probe: () => Promise<T>,
-  pollIntervalMs: number,
-  maxWaitMs: number,
-): Promise<T> => {
-  const deadline = Date.now() + maxWaitMs;
-  let last: T = await probe();
-  for (;;) {
-    const state = String(last['status'] ?? last['state'] ?? '').toLowerCase();
-    if (TERMINAL.has(state)) return last;
-    if (Date.now() >= deadline) {
-      throw new Error(
-        `did not finish within ${maxWaitMs / 1000}s (last status: "${state || '?'}")`,
-      );
-    }
-    await sleep(pollIntervalMs);
-    last = await probe();
-  }
-};
 
 /** `TestingPlanConfig` (pkg/testing/pipeline.go); the strategy reads `config.techniques`. */
 const buildTestingPlan = (input: {
@@ -187,14 +151,49 @@ const stringifyCell = (v: unknown): string => {
   return String(v);
 };
 
-/** Extract the `results` array from either a bare array or a `{results:[]}` wrapper. */
-const extractRows = (payload: unknown): unknown[] => {
+/** Rows from a bare array, `{items, pagination}` (list endpoints) or `{results}` (batch-automate). */
+export const extractRows = (payload: unknown): unknown[] => {
   if (Array.isArray(payload)) return payload;
   if (payload !== null && typeof payload === 'object') {
-    const inner = (payload as Record<string, unknown>)['results'];
-    if (Array.isArray(inner)) return inner;
+    const record = payload as Record<string, unknown>;
+    for (const key of ['items', 'results']) {
+      if (Array.isArray(record[key])) return record[key];
+    }
   }
   return [];
+};
+
+/** `--page` / `--page-size` / `--all` for `{items, pagination}` lists (`page-size` max 100). */
+const pageOptions = (cmd: Command): Command =>
+  cmd
+    .option('--page <n>', 'page number (1-based)')
+    .option('--page-size <n>', 'rows per page (max 100)')
+    .option('--all', 'follow pagination and return every row as {items}', false);
+
+interface PageOpts {
+  page?: string;
+  pageSize?: string;
+  all?: boolean;
+}
+
+const pageParams = (opts: PageOpts, page?: number): QueryParams => ({
+  ...(page !== undefined || opts.page !== undefined ? { page: page ?? Number(opts.page) } : {}),
+  ...(opts.pageSize !== undefined ? { 'page-size': Number(opts.pageSize) } : {}),
+});
+
+/** One page, or every page concatenated when `--all`. */
+const fetchPaged = async (
+  opts: PageOpts,
+  fetchPage: (params: QueryParams) => Promise<unknown>,
+): Promise<unknown> => {
+  if (opts.all !== true) return fetchPage(pageParams(opts));
+  const items: unknown[] = [];
+  for (let page = 1; ; page += 1) {
+    const res = await fetchPage(pageParams(opts, page));
+    items.push(...extractRows(res));
+    const pg = isObject(res) ? res['pagination'] : undefined;
+    if (!isObject(pg) || pg['has_next'] !== true) return { items };
+  }
 };
 
 const collectHeaders = (rows: unknown[]): string[] => {
@@ -443,7 +442,10 @@ export function registerRedteam(program: Command): void {
               const jobId = resolveId(row, 'job_id');
               if (jobId === null) continue;
               jobs.push(
-                await pollUntilTerminal(() => client.redteam.getMrJob(jobId), pollMs, maxMs),
+                await pollUntilTerminal(() => client.redteam.getMrJob(jobId), {
+                  intervalMs: pollMs,
+                  timeoutMs: maxMs,
+                }),
               );
             }
             emit({ batch, jobs }, true);
@@ -481,7 +483,10 @@ export function registerRedteam(program: Command): void {
           if (runId === null) {
             throw new Error(`could not resolve run id from response: ${JSON.stringify(run)}`);
           }
-          const final = await pollUntilTerminal(() => client.getRun(runId), pollMs, maxMs);
+          const final = await pollUntilTerminal(() => client.getRun(runId), {
+            intervalMs: pollMs,
+            timeoutMs: maxMs,
+          });
           const results = await client.getRunResults(runId);
           emit({ status: final, results }, true);
         });
@@ -493,8 +498,11 @@ export function registerRedteam(program: Command): void {
   // -------------------------------------------------------------------
 
   const sessionCmd = cmd.command('session').description('inspect red-team sessions');
-  sessionCmd.command('list').action(async () => {
-    await runAction(async () => emit(await rt().listSessions(), true));
+  pageOptions(sessionCmd.command('list')).action(async (opts: PageOpts) => {
+    await runAction(async () => {
+      const client = rt();
+      emit(await fetchPaged(opts, (params) => client.listSessions(params)), true);
+    });
   });
   sessionCmd.command('get <sessionId>').action(async (sessionId: string) => {
     await runAction(async () => emit(await rt().getSession(sessionId), true));
@@ -647,20 +655,21 @@ export function registerRedteam(program: Command): void {
       await runAction(async () => emit(await rt().cancelRun(jobId), true));
     });
 
-  cmd
-    .command('results <jobId>')
-    .description('results for a testing run, falling back to mr-jailbreak interactions on 404')
-    .action(async (jobId: string) => {
-      await runAction(async () => {
-        const client = rt();
-        try {
-          emit(await client.getRunResults(jobId), true);
-        } catch (error) {
-          if (!isNotFound(error)) throw error;
-          emit(await client.getMrJobInteractions(jobId), true);
-        }
-      });
+  pageOptions(
+    cmd
+      .command('results <jobId>')
+      .description('results for a testing run, falling back to mr-jailbreak interactions on 404'),
+  ).action(async (jobId: string, opts: PageOpts) => {
+    await runAction(async () => {
+      const client = rt();
+      try {
+        emit(await fetchPaged(opts, (params) => client.getRunResults(jobId, params)), true);
+      } catch (error) {
+        if (!isNotFound(error)) throw error;
+        emit(await client.getMrJobInteractions(jobId), true);
+      }
     });
+  });
 
   // -------------------------------------------------------------------
   // report [runId] --format {json,csv,markdown} [--session <id>]
@@ -694,7 +703,10 @@ export function registerRedteam(program: Command): void {
           process.stdout.write(resultsToCsv(parsed));
           return;
         }
-        const payload = await client.getRunResults(runId as string);
+        // A report covers every result, so follow pagination.
+        const payload = await fetchPaged({ all: true, pageSize: '100' }, (params) =>
+          client.getRunResults(runId as string, params),
+        );
         if (opts.format === 'json') {
           emit(payload, true);
           return;

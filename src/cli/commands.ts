@@ -193,7 +193,7 @@ export function registerPack(program: Command): void {
 
 /** run group */
 export function registerRun(program: Command): void {
-  const cmd = program.command('run').description('pack runs');
+  const cmd = program.command('run').alias('pp-run').description('pack runs');
 
   commonJson(
     cmd.command('list <packId>').action(async (packId: string, opts: CommonOpts) => {

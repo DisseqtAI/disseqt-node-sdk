@@ -240,12 +240,17 @@ export class DisseqtAPIClient {
     return this.create_output_validation(runId, request);
   }
 
-  async list_run_output_validations(runId: string): Promise<JsonObject> {
-    return this._request('GET', `/runs/${runId}/output-validations`);
+  /**
+   * No run-scoped list route exists; the backend lists per pack (`GET /:id/output-validations`).
+   * @deprecated Pass the pack id, or use `listPackOutputValidations`.
+   */
+  async list_run_output_validations(packId: string): Promise<JsonObject> {
+    return this._request('GET', `/${packId}/output-validations`);
   }
 
-  listRunOutputValidations(runId: string): Promise<JsonObject> {
-    return this.list_run_output_validations(runId);
+  /** @deprecated See `list_run_output_validations`. */
+  listRunOutputValidations(packId: string): Promise<JsonObject> {
+    return this.list_run_output_validations(packId);
   }
 
   async get_output_validation(validationId: string): Promise<JsonObject> {

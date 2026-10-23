@@ -53,41 +53,43 @@ export async function runAction(fn: () => Promise<void>): Promise<void> {
   }
 }
 
+/** Run states that end polling (testing runs, pack/plan runs, mr-jailbreak jobs). */
+export const TERMINAL_STATUSES: ReadonlySet<string> = new Set([
+  'completed',
+  // pkg/testplan/walk.go: per-prompt failures still finalize as completed_with_errors.
+  'completed_with_errors',
+  'complete',
+  'failed',
+  'cancelled',
+  'canceled',
+  // api/testing_handlers.go cancel → `stopped` (with stop_reason).
+  'stopped',
+  'error',
+  'errored',
+  'blocked',
+  'succeeded',
+  'done',
+]);
+
 /**
- * Poll `getStatus` until it returns a terminal status; throws once the
- * deadline passes so `runAction` exits non-zero instead of printing a
- * still-running payload as if it were final. `getStatus` receives the
- * unwrapped `data` object, so `status` is the run's own state — never the
- * envelope's `"success"`.
- * ponytail: constant 3s interval + 15min ceiling; upgrade to exp backoff if runs
- * routinely miss the ceiling.
+ * Poll `getStatus` (unwrapped `data`) until `status`/`state` is terminal; throws at the deadline.
+ * ponytail: constant interval; exp backoff if runs routinely miss the ceiling.
  */
 export async function pollUntilTerminal<T extends Record<string, unknown>>(
   getStatus: () => Promise<T>,
   options: { intervalMs?: number; timeoutMs?: number } = {},
 ): Promise<T> {
   const interval = options.intervalMs ?? 3000;
-  const deadline = Date.now() + (options.timeoutMs ?? 15 * 60 * 1000);
-  const terminal = new Set([
-    'completed',
-    // pkg/testplan/walk.go: a test-plan run may terminate with per-prompt
-    // execution failures but still finalize; that state is 'completed_with_errors'.
-    'completed_with_errors',
-    'complete',
-    'failed',
-    'cancelled',
-    'canceled',
-    'error',
-    'errored',
-    'blocked',
-    'succeeded',
-  ]);
+  const timeoutMs = options.timeoutMs ?? 15 * 60 * 1000;
+  const deadline = Date.now() + timeoutMs;
   for (;;) {
     const res = await getStatus();
-    const status = String(res['status'] ?? '').toLowerCase();
-    if (terminal.has(status)) return res;
-    if (Date.now() > deadline) {
-      throw new Error(`timed out waiting for terminal status (last status: "${status || '?'}")`);
+    const status = String(res['status'] ?? res['state'] ?? '').toLowerCase();
+    if (TERMINAL_STATUSES.has(status)) return res;
+    if (Date.now() >= deadline) {
+      throw new Error(
+        `did not finish within ${timeoutMs / 1000}s (last status: "${status || '?'}")`,
+      );
     }
     await new Promise((r) => setTimeout(r, interval));
   }

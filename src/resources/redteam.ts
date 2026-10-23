@@ -46,24 +46,42 @@ export interface RedteamSession {
   [k: string]: unknown;
 }
 
-/** Testing run row (single-turn). */
+/** api/testing_types.go TestingRunResponse; `stopped` is terminal and carries `stop_reason`. */
 export interface RedteamRun {
   id?: string;
   run_id?: string;
   session_id?: string;
   status?: string;
+  stop_reason?: string;
   state?: string;
   technique?: string;
   [k: string]: unknown;
 }
 
-/** Response from `/api/v1/testing/validate`. */
+/** api/testing_validate_handler.go TestingValidatorResult. */
+export interface RedteamValidatorResult {
+  validator_name: string;
+  score: number;
+  failed: boolean;
+  explanation?: string;
+  rule_status: 'pass' | 'fail' | 'error' | string;
+  error?: string;
+}
+
+/** api/testing_validate_handler.go TestingValidateResponse. */
 export interface RedteamValidateResponse {
-  input?: string;
-  output?: string;
-  results?: JsonValue;
-  overall_verdict?: string;
-  [k: string]: unknown;
+  results: RedteamValidatorResult[];
+  aggregate_decision: 'PASS' | 'BORDERLINE' | 'BLOCK' | string;
+  processed_at: string;
+}
+
+/** api/prompt_packs_types.go PaginationResponse. */
+export interface RedteamPagination {
+  page: number;
+  page_size: number;
+  total: number;
+  total_pages: number;
+  has_next: boolean;
 }
 
 /** Analytics summary payload. */
@@ -171,9 +189,9 @@ export class RedteamClient extends ResourceBase {
     return this._request('GET', `${TESTING}/runs/${runId}`);
   }
 
-  /** GET /api/v1/testing/runs/{id}/results — may be array or object. */
-  getRunResults(runId: string): Promise<unknown> {
-    return this._requestAny('GET', `${TESTING}/runs/${runId}/results`);
+  /** GET /api/v1/testing/runs/{id}/results → `{items, pagination}` (`page`, `page-size` ≤ 100). */
+  getRunResults(runId: string, params?: QueryParams): Promise<unknown> {
+    return this._requestAny('GET', `${TESTING}/runs/${runId}/results`, params ? { params } : {});
   }
 
   /** POST /api/v1/testing/runs/{id}/cancel */
@@ -205,8 +223,11 @@ export class RedteamClient extends ResourceBase {
   // ---------------------------------------------------------------------
 
   /** POST /api/v1/testing/validate — one-shot single-turn validator run. */
-  validate(payload: RedteamValidateRequest): Promise<JsonObject> {
-    return this._request('POST', `${TESTING}/validate`, { json: payload as unknown as JsonValue });
+  async validate(payload: RedteamValidateRequest): Promise<RedteamValidateResponse> {
+    const out = await this._request('POST', `${TESTING}/validate`, {
+      json: payload as unknown as JsonValue,
+    });
+    return out as unknown as RedteamValidateResponse;
   }
 
   // ---------------------------------------------------------------------

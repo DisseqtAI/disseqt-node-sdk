@@ -267,8 +267,9 @@ describe('Prompt Packs output validations', () => {
       ],
     });
 
-    await client.list_run_output_validations('run-xyz-456');
-    expect(lastUrl(fetcher)).toBe(`${PREFIX}/runs/run-xyz-456/output-validations`);
+    // No run-scoped route is registered; the list is per pack (server.go `/:id/output-validations`).
+    await client.list_run_output_validations('pack-abc-123');
+    expect(lastUrl(fetcher)).toBe(`${PREFIX}/pack-abc-123/output-validations`);
 
     await client.getOutputValidation('val-def-789');
     expect(lastUrl(fetcher)).toBe(`${PREFIX}/output-validations/val-def-789`);

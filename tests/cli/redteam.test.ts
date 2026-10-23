@@ -65,6 +65,20 @@ beforeAll(async () => {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       // Match query-stripped path against the map, then fall back.
       const path = (req.url ?? '').split('?')[0] ?? '';
+      // Two-page {items, pagination} list (api/testing_types.go TestingSessionsListResponse).
+      if (req.method === 'GET' && path === '/api/v1/testing/sessions') {
+        const page = Number(new URL(req.url ?? '', 'http://x').searchParams.get('page') ?? '1');
+        res.end(
+          JSON.stringify({
+            status: 'success',
+            data: {
+              items: [{ id: `s-${page}` }],
+              pagination: { page, page_size: 1, total: 2, total_pages: 2, has_next: page < 2 },
+            },
+          }),
+        );
+        return;
+      }
       // Real backend envelope (api/response.go): the SDK unwraps `data`.
       const mapped = responseMap[path];
       if (mapped !== undefined) {
@@ -441,10 +455,39 @@ describe('disseqt redteam CLI', () => {
     expect(requests.at(-1)?.url).toBe('/api/v1/testing/runs/r1/results');
   });
 
-  it('report --format=json GETs the results endpoint', async () => {
+  it('report --format=json GETs every results page', async () => {
     const result = await runCli(['redteam', 'report', 'r1', '--format', 'json']);
     expect(result.code).toBe(0);
-    expect(requests.at(-1)?.url).toBe('/api/v1/testing/runs/r1/results');
+    expect(requests.at(-1)?.url).toBe('/api/v1/testing/runs/r1/results?page=1&page-size=100');
+  });
+
+  it('report --format=markdown renders {items} rows', async () => {
+    responseMap['/api/v1/testing/runs/r-items/results'] = {
+      items: [{ id: 'x1', breach_detected: true }],
+      pagination: { page: 1, page_size: 100, total: 1, total_pages: 1, has_next: false },
+    };
+    const result = await runCli(['redteam', 'report', 'r-items', '--format', 'markdown']);
+    delete responseMap['/api/v1/testing/runs/r-items/results'];
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain('| id | breach_detected |');
+    expect(result.stdout).toContain('| x1 | true |');
+  });
+
+  it('session list --page/--page-size forwards query params', async () => {
+    const result = await runCli(['redteam', 'session', 'list', '--page', '2', '--page-size', '1']);
+    expect(result.code).toBe(0);
+    expect(requests.at(-1)?.url).toBe('/api/v1/testing/sessions?page=2&page-size=1');
+  });
+
+  it('session list --all follows has_next and concatenates items', async () => {
+    const before = requests.length;
+    const result = await runCli(['redteam', 'session', 'list', '--all']);
+    expect(result.code).toBe(0);
+    expect(requests.slice(before).map((r) => r.url)).toEqual([
+      '/api/v1/testing/sessions?page=1',
+      '/api/v1/testing/sessions?page=2',
+    ]);
+    expect(JSON.parse(result.stdout)).toEqual({ items: [{ id: 's-1' }, { id: 's-2' }] });
   });
 
   it('report --format=csv --session hits the server CSV endpoint', async () => {
