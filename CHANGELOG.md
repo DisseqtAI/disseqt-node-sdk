@@ -2,22 +2,37 @@
 
 ## Unreleased
 
+### Breaking
+
+Relative to 0.3.0; everything else in this release is additive or fixes routes
+that never worked.
+
+- **BREAKING (types only):** `projectId` is now `string | undefined` on
+  `DisseqtHttpTransport`, `Client`, `DisseqtAPIClient` and `DisseqtAuthConfig`.
+  The API key alone identifies the project; code that reads `.projectId` as a
+  `string` needs a guard. Runtime behaviour for callers that pass a project id
+  is unchanged.
+- **BREAKING:** `DisseqtAPIClient.listRunOutputValidations` /
+  `list_run_output_validations` now take the **pack id**. The old
+  `/runs/{runId}/output-validations` route was never registered (always 404);
+  the call now hits `/{packId}/output-validations`. Deprecated in favour of
+  `listPackOutputValidations`.
+
+### Deprecated
+
+- The realtime-policy surface — `Client({ policies, realtimePolicyBaseUrl })`,
+  `validate(request, { policies })` and the `validation/policy` helpers
+  (`anyBlocking`, `isBlocking`, `isAsync`, `parsePolicy`, `DECISION_*`, ...) —
+  is kept for 0.3 compatibility but logs a one-time `console.warn`: the
+  `POST /api/v1/sdk/policies/{id}/evaluate` route it targets is not served by
+  any current backend. Removal is planned for the next major.
+- `--target` on `redteam attack` / `vuln-test` / `vulnerability test` (use
+  `--app`, `--integration` or `--endpoint`), and the `redteam run` YAML keys
+  `packs` / `application_context` / `target_config` (use `prompt_packs` /
+  `application` / `target`). Both still work and print a warning.
+
 ### Removed
 
-- **Server-side realtime-policy evaluation surface.** The
-  `Client.validate(request, { policies: [...] })` shape (and the
-  `{ raiseOnAsync: true }` option on `Client.validateSync`, which is kept
-  as a plain alias of `validate()`), the
-  `Guardrails` class + `BaseGuard` extension, `BlockedError`, the
-  policy helpers module (`anyBlocking`, `isBlocking`, `isAsync`,
-  `parsePolicy`, `PolicyDecision`, `PolicyRule`, `PolicyRuleset`,
-  `DECISION_BLOCK/BORDERLINE/PASS`), and the `realtimePolicyBaseUrl` /
-  `policies` ctor options have been removed. The runtime evaluate
-  endpoint they targeted (`POST /api/v1/sdk/policies/{id}/evaluate`) is
-  not currently served by any in-scope backend; keeping the shape
-  without a working transport would silently 404 on the first live
-  call. Class-based validators (`Client.validate(new InputValidator(...))`
-  and the composite/themes paths) are unaffected.
 - **`disseqt redteam eval-csv` and `disseqt redteam eval-single-turn`**, with
   `RedteamClient.evaluateCsv` / `evaluateCsvJob` / `singleTurnEvaluate`.
   Their `/api/v1/jailbreak/evaluate-csv*` and `/single-turn-evaluate` routes
@@ -57,31 +72,35 @@
   `items: []`. The owner listing `GET /my-packs` (`getUserOwnedPacks`, on the
   same service-key mount) is now reachable as `PacksClient.listMine(params?)`
   and backs `disseqt pack list`; pass `--marketplace` for the public catalog.
-- **Backend envelope is unwrapped once, in the transport.** Every
-  `requestJson` / `requestJsonAny` call now returns the `data` member of
-  the dataset-backend's `{"status":"success","data":...}` envelope and
-  throws `DisseqtApiError` (new, with `code` / `requestId`) when a 2xx body
-  carries `{"status":"error"}`. Pollers stop mistaking the envelope's
-  `"success"` for a terminal run state, and `disseqt run --wait` /
-  `plan-run --wait` / `redteam attack` exit non-zero when the deadline
-  passes instead of printing a still-running payload as if it were final.
+- **Backend envelope is unwrapped for the resource clients only.**
+  `DisseqtResourceClient` (and `disseqt scan`) return the `data` member of
+  the dataset-backend's `{"status":"success","data":...}` envelope and throw
+  `DisseqtApiError` (new, with `code` / `requestId`) when a 2xx body carries
+  `{"status":"error"}`; this is opt-in per request (`unwrapEnvelope: true`),
+  so `Client` and `DisseqtAPIClient` return the raw body exactly as in 0.3.
+  Pollers stop mistaking the envelope's `"success"` for a terminal run state.
 - **`redteam` request bodies match the Go structs** (`api/testing_types.go`,
   `pkg/testing/pipeline.go`, `api/mr_jailbreak_batch_automation.go`,
   `api/testing_bot_handlers.go`, `api/vulnerability_types.go`):
   - `attack --single-turn` / `run <yaml>` send
-    `{name, application_context, target_config:{application_id}, testing_plan}`
-    then `{run_name?, trigger_metadata, application_id?}`.
+    `{name, application_context:{name, type}, target_config, testing_plan}`
+    (an empty `application_context` left the session in `draft`) then
+    `{run_name, trigger_metadata:{source:"disseqt-cli"}}`; the testing plan
+    carries `config.techniques`. Single-turn needs at least one `--pack` and
+    `--validator` (exit 2).
   - `attack --multi-turn` sends a `BatchAutomateJailbreakRequest`
-    (`target_prompts` from repeatable `--prompt`, 1..10;
-    `app_integration_template` from `--target <file>`; `jailbreak_config`;
-    `ecid_prefix: "cli"`, `ecid_start_number: 1`) and polls
-    `/mr-jailbreak/jobs/{id}` for every returned job.
+    (`target_prompts` from repeatable `--prompt`, 1..10; the target as
+    top-level `app_integration_id`, `jailbreak_config.application_id`, or a
+    legacy `app_integration_template`; `ecid_prefix: "cli"`,
+    `ecid_start_number: 1`), polls `/mr-jailbreak/jobs/{id}` for every
+    returned job and prints `{batch, jobs}`.
   - `parse-curl` sends `{curl_command}`; `test-connection` sends the flat
     `{endpoint, provider, model, api_key, session_id?}`; `recommend packs`
     sends `{app_name, app_description}` and `recommend attacks|validators`
     send `{app_description}`.
-  - `vuln-test` and `vulnerability test` send `{app_integration_id}` (or
-    `--llm-config`) with `?project_id&organization_id`.
+  - `vuln-test` and `vulnerability test` send `{app_integration_id}`,
+    `{application_id}` or `{llm_config}`; `project_id` / `organization_id`
+    query params are sent only when known (the gateway injects them).
   - `status` / `results` fall back to mr-jailbreak only on a 404.
 - `RedteamClient.listAgents` (`redteam list-attacks --kind agents`,
   `list-personas`) sends the `page_id=1&page-size=100` query the backend
@@ -113,6 +132,13 @@ threshold_score, others}}`) is turned into one finding per chunk when
 - `disseqt scan` exits 1 when no validator request succeeded or any batch
   failed (config errors stay exit 2), prints the first failure, and stops
   after the first 401/403 instead of replaying it for every batch.
+- `RedteamClient.validate` returns the real `TestingValidateResponse`
+  (`results[]` with `validator_name/score/failed/rule_status/explanation/error`,
+  `aggregate_decision` `PASS|BORDERLINE|BLOCK`, `processed_at`); the old
+  `overall_verdict` / `input` / `output` fields never existed. `RedteamRun`
+  models `stop_reason`, and `stopped` is a terminal status for every poller.
+- Testing list endpoints are read as `{items, pagination}` (sessions, run
+  results); `redteam report` now renders every row instead of nothing.
 - `~/.disseqt/config.json` is `chmod 0600` after every write, not only on
   create; the masked key prefix shown by `login` is capped at 8 chars.
 
@@ -148,9 +174,15 @@ threshold_score, others}}`) is turned into one finding per chunk when
   `api/server.go`) carries the same packs / prompts / runs /
   output-validations surface. Targets, rag/mcp targets, custom validators,
   vulnerabilities, plans and plan-runs keep their current paths.
-- **Auth contract.** The SDK and CLI send only `X-API-Key` + `X-Project-Id`;
-  the gateway injects the service key and identity. No service-key header
-  is ever set client-side.
+- **Auth contract.** The SDK and CLI send `X-API-Key` and, only when one is
+  configured, `X-Project-Id`; the gateway derives project / org / user from
+  the key. No service-key header is ever set client-side.
+- Credentials resolve as constructor args > `DISSEQT_API_KEY` /
+  `DISSEQT_PROJECT_ID` > `~/.disseqt/config.json` (Python parity). An env key
+  is never paired with a stored project id. `disseqt login --project-id` is
+  optional.
+- `redteam attack --multi-turn` defaults `--max-depth` to 5 and testing plans
+  default `max_total_prompts` to 0 (unlimited), matching the Python CLI.
 - `disseqt login` smoke-tests credentials with
   `GET {DISSEQT_BASE_URL}/api/v1/testing/attack-techniques` (401/403 =
   bad key or project) and honours `DISSEQT_BASE_URL` when `--base-url` is
@@ -175,6 +207,26 @@ threshold_score, others}}`) is turned into one finding per chunk when
   scanner with `--diff`), and resource verbs (`run`, `plan-run`,
   `vulnerability`, targets, packs, ...). See the README's CLI section.
 - `DisseqtApiError` for 2xx `{status:"error"}` envelopes.
+- `DisseqtResourceClient.whoami()` and `disseqt whoami [--json]`:
+  `GET /api/v1/whoami` → `{project_id, organization_id, user_id}`; while that
+  route is not deployed (404) it reports the locally configured values with
+  `source: "local"`.
+- Target flags on every red-team entry point — `redteam attack` (single and
+  multi-turn), `redteam vuln-test`, `vulnerability test`, `run create`
+  (alias `pp-run`) and `plan-run create`: exactly one of `--app <ai-system>`,
+  `--integration <app-integration>` or `--endpoint <url>` (multi-turn: a
+  legacy template); zero or several exit 2. `run create` / `plan-run create`
+  accept a target flag instead of, or merged into, `--body`.
+- `disseqt app list` (policy-mgmt `GET /api/v1/applications`, base URL from
+  `DISSEQT_POLICIES_BASE_URL`), `app link <id> --integration <id> [--role]`
+  and `app unlink <id>` (`/api/v1/llm/application-links`), plus
+  `client.applications` / `client.applicationLinks`.
+- `redteam session list` / `results` take `--page`, `--page-size` and `--all`.
+- Ctrl-C or a `--max-wait` timeout while a CLI command polls cancels the
+  testing / pack / plan run or output validation, prints how to inspect it,
+  and exits 1 (multi-turn jobs have no cancel route and only get the hint).
+- `DisseqtAgenticClient({ applicationId })` sends `X-Application-Id`
+  (UUID-validated; omitted when unset), matching the Python client.
 - `CreateRunRequest` (prompt packs) gained an optional `applicationId` /
   `application_id` field. When set and none of `llm_id`/
   `app_integration_id`/`custom_llm_id` is otherwise supplied, the backend

@@ -961,7 +961,12 @@ describe('polling interrupts', () => {
     responseMap[RUN] = { id: 'test-id', status: 'running' };
     const before = requests.length;
     const child = spawn(process.execPath, [CLI, ...attack, '--max-wait', '30'], {
-      env: { ...process.env, DISSEQT_API_KEY: 'k', DISSEQT_PROJECT_ID: 'p', DISSEQT_BASE_URL: baseUrl },
+      env: {
+        ...process.env,
+        DISSEQT_API_KEY: 'k',
+        DISSEQT_PROJECT_ID: 'p',
+        DISSEQT_BASE_URL: baseUrl,
+      },
     });
     let stderr = '';
     child.stderr.on('data', (c: Buffer) => (stderr += c.toString('utf-8')));

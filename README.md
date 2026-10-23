@@ -247,42 +247,59 @@ Snake_case method aliases (`generate_prompt_pack`, `create_run`, `download_pack_
 ## CLI
 
 The package ships a `disseqt` binary (`npx disseqt --help`). Every verb
-authenticates with **only** `X-API-Key` + `X-Project-Id`; the gateway
-injects the service key and identity, so no service-key header is ever set
-client-side.
+authenticates with **only** `X-API-Key` (plus `X-Project-Id` when you set
+one); the gateway derives project / org / user from the key, so no
+service-key header is ever set client-side.
 
 ```bash
-disseqt login --api-key $KEY --project-id $PROJECT   # smoke-tests GET /api/v1/testing/attack-techniques
-disseqt logout                                       # clears ~/.disseqt/config.json only
+disseqt login --api-key $KEY       # --project-id optional; smoke-tests GET /api/v1/testing/attack-techniques
+disseqt whoami --json              # {project_id, organization_id, user_id} the key resolves to
+disseqt logout                     # clears ~/.disseqt/config.json only
 ```
 
-Credentials resolve from flags → `~/.disseqt/config.json` → `DISSEQT_API_KEY`
-/ `DISSEQT_PROJECT_ID`. `DISSEQT_BASE_URL` (default
+Credentials resolve from flags → `DISSEQT_API_KEY` / `DISSEQT_PROJECT_ID` →
+`~/.disseqt/config.json`. `DISSEQT_BASE_URL` (default
 `https://api.disseqt.ai/dataset`) fronts every resource and `redteam` verb;
 `disseqt scan` uses `DISSEQT_VALIDATORS_BASE_URL` (default
 `https://api.disseqt.ai/realtime-validations`).
 
 ### `disseqt redteam`
 
-| Verb                                                                                                    | Backend call                                                                                                      | Body                                                                                                                                                                             |
-| ------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `list-attacks [--kind single\|multi\|agents\|all]`                                                      | `GET /testing/attack-techniques`, `/mr-jailbreak/techniques`, `/mr-jailbreak/agents`                              | —                                                                                                                                                                                |
-| `attack --single-turn --technique <key> --target <application_id> [--pack <id>]* [--validator <name>]*` | `POST /testing/sessions` → `POST /testing/sessions/{id}/runs` → poll `GET /testing/runs/{id}` → `GET .../results` | `{name, application_context, target_config:{application_id}, testing_plan:{prompt_sources, attack_strategies, validators, execution}}` then `{trigger_metadata, application_id}` |
-| `attack --multi-turn --technique <uuid> --target <template.json> --prompt <p>{1,10}`                    | `POST /mr-jailbreak/batch-automate` → poll `GET /mr-jailbreak/jobs/{id}` per job                                  | `{target_prompts, app_integration_template, jailbreak_config, ecid_prefix:"cli", ecid_start_number:1}`                                                                           |
-| `run <config.yaml> [--json]`                                                                            | session + run as above                                                                                            | YAML keys `name`, `application_context`, `target_config`, `testing_plan` (or `techniques`/`packs`/`validators`), `run_name`                                                      |
-| `vuln-test --vulnerability <id> --target <app_integration_id> [--organization-id <id>]`                 | `POST /vulnerabilities/{id}/test/poll?project_id&organization_id`                                                 | `{app_integration_id}` or `--llm-config`                                                                                                                                         |
-| `validate --input --validator <name>...`                                                                | `POST /testing/validate`                                                                                          | `{input, output, validators, input_context, threshold?}`                                                                                                                         |
-| `status <id>` / `results <id>` / `cancel <id>`                                                          | `/testing/runs/{id}`, `.../results`, `.../cancel`; 404 → `/mr-jailbreak/jobs/{id}`, `.../interactions`            | —                                                                                                                                                                                |
-| `report <runId> --format json\|markdown` / `report --format csv --session <id>`                         | `GET /testing/runs/{id}/results` / `GET /testing/sessions/{id}/report/csv`                                        | —                                                                                                                                                                                |
-| `analytics [--summary\|--prompts-stats]`                                                                | `GET /jailbreak/analytics/summary`, `GET /jailbreak/prompts-stats`                                                | —                                                                                                                                                                                |
-| `recommend packs --app-name --app-description` / `recommend attacks\|validators --app-description`      | `POST /testing/bot/recommend-{kind}`                                                                              | `{app_name, app_description}` / `{app_description}`                                                                                                                              |
-| `parse-curl <file>\|--stdin`                                                                            | `POST /testing/bot/parse-curl`                                                                                    | `{curl_command}`                                                                                                                                                                 |
-| `test-connection --endpoint --provider --model --api-key-env VAR [--session-id]`                        | `POST /testing/bot/test-connection`                                                                               | `{endpoint, provider, model, api_key, session_id?}`                                                                                                                              |
+| Verb                                                                                                  | Backend call                                                                                                      | Body                                                                                                                                                                                     |
+| ----------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `list-attacks [--kind single\|multi\|agents\|all]`                                                    | `GET /testing/attack-techniques`, `/mr-jailbreak/techniques`, `/mr-jailbreak/agents`                              | —                                                                                                                                                                                        |
+| `attack --single-turn --technique <key> <TARGET> --pack <id>... --validator <name>...`                | `POST /testing/sessions` → `POST /testing/sessions/{id}/runs` → poll `GET /testing/runs/{id}` → `GET .../results` | `{name, application_context:{name,type}, target_config:{application_id\|app_integration_id\|endpoint_url}, testing_plan}` then `{run_name, trigger_metadata}`                            |
+| `attack --multi-turn --technique <uuid> <TARGET> --prompt <p>{1,10} [--max-depth 5]`                  | `POST /mr-jailbreak/batch-automate` → poll `GET /mr-jailbreak/jobs/{id}` per job                                  | `{target_prompts, app_integration_id \| jailbreak_config.application_id \| app_integration_template, jailbreak_config, ecid_prefix:"cli", ecid_start_number:1}`                          |
+| `run <config.yaml> [--json]`                                                                          | session + run as above                                                                                            | YAML keys `name`, `application`, `target`, `prompt_packs`, `techniques`, `validators`, `stop_on_first_breach`, `max_total_prompts` (0 = unlimited), `run_name` (or a raw `testing_plan`) |
+| `vuln-test --vulnerability <id> (--app\|--integration <id> \| --llm-config) [--organization-id <id>]` | `POST /vulnerabilities/{id}/test/poll`                                                                            | `{application_id}` / `{app_integration_id}` / `{llm_config}`                                                                                                                             |
+| `validate --input --validator <name>...`                                                              | `POST /testing/validate`                                                                                          | `{input, output, validators, input_context, threshold?}`                                                                                                                                 |
+| `status <id>` / `results <id>` / `cancel <id>`                                                        | `/testing/runs/{id}`, `.../results`, `.../cancel`; 404 → `/mr-jailbreak/jobs/{id}`, `.../interactions`            | —                                                                                                                                                                                        |
+| `report <runId> --format json\|markdown` / `report --format csv --session <id>`                       | `GET /testing/runs/{id}/results` / `GET /testing/sessions/{id}/report/csv`                                        | —                                                                                                                                                                                        |
+| `analytics [--summary\|--prompts-stats]`                                                              | `GET /jailbreak/analytics/summary`, `GET /jailbreak/prompts-stats`                                                | —                                                                                                                                                                                        |
+| `recommend packs --app-name --app-description` / `recommend attacks\|validators --app-description`    | `POST /testing/bot/recommend-{kind}`                                                                              | `{app_name, app_description}` / `{app_description}`                                                                                                                                      |
+| `parse-curl <file>\|--stdin`                                                                          | `POST /testing/bot/parse-curl`                                                                                    | `{curl_command}`                                                                                                                                                                         |
+| `test-connection --endpoint --provider --model --api-key-env VAR [--session-id]`                      | `POST /testing/bot/test-connection`                                                                               | `{endpoint, provider, model, api_key, session_id?}`                                                                                                                                      |
+
+`<TARGET>` is exactly one of `--app <ai-system-id>`, `--integration
+<app-integration-id>` or `--endpoint <url>` (multi-turn: a legacy
+`app_integration_template` as JSON or `@file`); `--target` is a deprecated
+alias. The same flags work on `vulnerability test`, `run create` (alias
+`pp-run`) and `plan-run create`. `session list` / `results` take `--page`,
+`--page-size`, `--all`. Ctrl-C or a `--max-wait` timeout while polling cancels
+the run and prints how to inspect it.
 
 All paths are under `/api/v1`. Responses are the backend's
 `{"status":"success","data":...}` envelope, unwrapped to `data`; a 2xx
 `{"status":"error"}` body raises `DisseqtApiError`. Exit codes: 0 ok,
-1 failed (HTTP/API error, poll deadline), 2 usage.
+1 failed (HTTP/API error, poll deadline, Ctrl-C), 2 usage/auth.
+
+### `disseqt app`
+
+```bash
+disseqt app list                                  # policy-mgmt GET /api/v1/applications (DISSEQT_POLICIES_BASE_URL)
+disseqt app link <application_id> --integration <app_integration_id>
+disseqt app unlink <application_id>
+```
 
 ### `disseqt scan`
 
