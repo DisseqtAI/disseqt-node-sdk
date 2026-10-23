@@ -1,7 +1,5 @@
-// Named metric — thin wrapper over criteria + threshold + labels.
-// Feeds the framework-mapping contract: `name` must match the server-side
-// `control.MetricName` string exactly for control-test wiring to fire.
-// Mirrors Python's `BaseMetric`.
+// Named metric (Python `BaseMetric`): criteria + threshold + labels. `name` must equal the
+// server-side `control.MetricName` for control-test wiring to fire.
 export interface BaseMetricOptions {
   criteria?: string;
   labels?: readonly string[];

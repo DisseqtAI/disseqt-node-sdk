@@ -22,9 +22,7 @@ export interface DisseqtRequestOptions {
   method: HttpMethod;
   url: string;
   json?: JsonValue;
-  /** Pre-encoded body (FormData / Blob / string). Skips Content-Type header
-   *  auto-population — the fetch runtime picks the correct boundary for
-   *  FormData, and callers set Content-Type explicitly for anything else. */
+  /** Pre-encoded body (FormData / Blob / string); no JSON Content-Type is added. */
   body?: BodyInit;
   params?: QueryParams;
   headers?: Record<string, string>;

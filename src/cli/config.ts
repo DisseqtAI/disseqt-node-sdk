@@ -82,11 +82,8 @@ export interface PollOptions {
   statusCommand?: string;
 }
 
-/**
- * Poll `getStatus` (unwrapped `data`) until `status`/`state` is terminal. On deadline or
- * SIGINT it calls `cancel`, prints a hint, and throws (exit 1 via `runAction`).
- * ponytail: constant interval; exp backoff if runs routinely miss the ceiling.
- */
+/** Poll until `status`/`state` is terminal; on deadline or SIGINT call `cancel`, then throw with a hint.
+ *  ponytail: constant interval; exp backoff if runs routinely miss the ceiling. */
 export async function pollUntilTerminal<T extends Record<string, unknown>>(
   getStatus: () => Promise<T>,
   options: PollOptions = {},

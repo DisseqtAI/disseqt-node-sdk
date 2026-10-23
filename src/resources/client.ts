@@ -41,13 +41,7 @@ export type DisseqtResourceClientConfig = Omit<ResourceClientConfig, 'apiKey' | 
   policiesBaseUrl?: string;
 };
 
-/**
- * Umbrella client exposing every direct-to-backend resource client the CLI
- * and SDK consumers use. Kept separate from `validation/Client` (which owns
- * validator helpers) and `prompt-packs/DisseqtAPIClient` (which uses the
- * `/sdk/prompt-packs/...` SDK prefix). All resource methods here hit raw
- * `/api/v1/...` paths.
- */
+/** Umbrella over every resource client the CLI uses; all hit raw `/api/v1/...` paths. */
 export class DisseqtResourceClient {
   readonly baseUrl: string;
   readonly transport: DisseqtHttpTransport;

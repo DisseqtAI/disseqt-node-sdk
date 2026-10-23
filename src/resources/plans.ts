@@ -3,11 +3,8 @@ import { ResourceBase } from './base.js';
 
 const ROOT = '/api/v1/test-plans';
 
-/**
- * Test Plans (T3). Versioned, shareable red-team plan templates.
- * Endpoint list mirrors dataset-backend `api/test_plans_routes.go` on stage.
- * Gated server-side by `ff_test-plans_enabled_global`.
- */
+/** Test Plans: versioned red-team plan templates (api/test_plans_routes.go),
+ *  gated by `ff_test-plans_enabled_global`. */
 export class PlansClient extends ResourceBase {
   create(payload: JsonValue): Promise<JsonObject> {
     return this._request('POST', ROOT, { json: payload });

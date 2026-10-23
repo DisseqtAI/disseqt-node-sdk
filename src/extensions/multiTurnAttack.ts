@@ -1,8 +1,6 @@
 import { BaseAttack, type AttackMetadata } from './attack.js';
 
-// Multi-turn attack — tracks turn state.
-// Subclasses override `nextTurn` and manage state via `turns`.
-// Mirrors Python's `BaseMultiTurnAttack`.
+// Multi-turn attack (Python `BaseMultiTurnAttack`): override `nextTurn`; state lives in `turns`.
 export abstract class BaseMultiTurnAttack extends BaseAttack {
   readonly maxTurns: number;
   readonly turns: readonly string[];

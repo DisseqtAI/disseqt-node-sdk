@@ -53,11 +53,8 @@ export class VulnerabilitiesClient extends ResourceBase {
   get(id: string): Promise<JsonObject> {
     return this._request('GET', `${this.root}/${id}`);
   }
-  /**
-   * POST /api/v1/vulnerabilities/{id}/test — fire-and-forget. Body is a
-   * `VulnerabilityTestRequest` (`app_integration_id` | `llm_config` |
-   * `custom_llm_id`); `project_id` + `organization_id` travel as query params.
-   */
+  /** POST /vulnerabilities/{id}/test (fire-and-forget); body is a `VulnerabilityTestRequest`,
+   *  `project_id` / `organization_id` go as query params. */
   test(id: string, payload?: JsonValue, params?: QueryParams): Promise<JsonObject> {
     return this._request('POST', `${this.root}/${id}/test`, {
       ...(payload !== undefined ? { json: payload } : {}),
@@ -72,14 +69,3 @@ export class VulnerabilitiesClient extends ResourceBase {
     });
   }
 }
-
-// NOTE: MultiTurnClient (previously exposed as `client.mr`) was removed
-// because no backend registers /api/v1/mr — the multi-turn surface lives at
-// /api/v1/mr-jailbreak/* (mr_jailbreak_routes.go:17). All four methods hit
-// unregistered routes. The functionality already exists on RedteamClient:
-//   getMrJob             GET  /api/v1/mr-jailbreak/jobs/:id
-//   getMrJobInteractions GET  /api/v1/mr-jailbreak/jobs/:id/interactions
-//   batchAutomate        POST /api/v1/mr-jailbreak/batch-automate
-//   listMultiTurnTechniques / listAgents
-// Chose Option (i) delete over Option (ii) rename because the class name
-// implied a generic /api/v1/mr root that does not exist in any form.

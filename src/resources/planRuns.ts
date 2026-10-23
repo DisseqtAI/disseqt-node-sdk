@@ -4,12 +4,8 @@ import { ResourceBase } from './base.js';
 const RUNS = '/api/v1/test-plan-runs';
 const PLANS = '/api/v1/test-plans';
 
-/**
- * Test Plan Runs (T6). Creation is addressed by PLAN id
- * (`POST /test-plans/:id/runs`); everything else lives under
- * `/test-plan-runs/:id`. Mirrors dataset-backend
- * `api/test_plan_runs_routes.go` on stage.
- */
+/** Test Plan Runs: create via `POST /test-plans/:id/runs`, the rest under `/test-plan-runs/:id`
+ *  (api/test_plan_runs_routes.go). */
 export class PlanRunsClient extends ResourceBase {
   create(planId: string, payload: JsonValue): Promise<JsonObject> {
     return this._request('POST', `${PLANS}/${planId}/runs`, { json: payload });

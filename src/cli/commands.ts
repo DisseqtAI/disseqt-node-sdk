@@ -530,11 +530,6 @@ export function registerBonus(program: Command): void {
         });
       },
     );
-
-  // NOTE: the `mr` group (previously list/get/create) was removed alongside
-  // MultiTurnClient — none of its routes existed on the backend. The real
-  // multi-turn surface is `/api/v1/mr-jailbreak/*`, exposed through
-  // `disseqt redteam` (list-attacks / batch-automate / status / results).
 }
 
 /** plan group — Test Plans (T3). /api/v1/test-plans/... */

@@ -80,11 +80,8 @@ export interface IterOptions {
   extraSkipGlobs?: readonly string[];
 }
 
-/**
- * Yield source files under `root` that match a supported language.
- * `only` is an optional whitelist (used by --diff mode). Paths in `only`
- * may be absolute or relative to `root`.
- */
+/** Source files under `root` in a supported language; `only` (absolute or root-relative)
+ *  narrows to a whitelist for --diff. */
 export async function* iterSourceFiles(
   root: string,
   options: IterOptions = {},

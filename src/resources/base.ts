@@ -19,11 +19,7 @@ export interface ResourceClientConfig extends DisseqtHttpTransportConfig {
   timeout?: number;
 }
 
-/**
- * Thin per-resource client — direct-to-backend calls under raw /api/v1/...
- * Kept separate from `DisseqtAPIClient` (which lives on the SDK-only
- * /sdk/prompt-packs prefix). One transport, one baseUrl, no path prefix.
- */
+/** Thin per-resource client: one transport, one baseUrl, raw `/api/v1/...` paths. */
 export class ResourceBase {
   readonly baseUrl: string;
   protected readonly transport: DisseqtHttpTransport;
@@ -74,11 +70,7 @@ export class ResourceBase {
     return this.transport.requestRaw(req);
   }
 
-  /**
-   * Request an endpoint that may return any JSON shape (array, object,
-   * primitive). Used by resources whose backend returns list literals
-   * (e.g. Python-parity `/attack-techniques`). Callers narrow the type.
-   */
+  /** Any JSON shape (arrays included); callers narrow the type. */
   protected async _requestAny(
     method: HttpMethod,
     path: string,

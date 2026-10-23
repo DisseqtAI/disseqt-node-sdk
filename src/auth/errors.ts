@@ -1,10 +1,6 @@
 import { DisseqtError } from '../http/errors.js';
 
-/**
- * Base for anything auth-related. Extends `DisseqtError` so existing
- * catch-alls keep working; also lets consumers branch on `instanceof
- * DisseqtAuthError` without pulling in specific subclasses.
- */
+/** Base for auth errors; extends `DisseqtError` so existing catch-alls still match. */
 export class DisseqtAuthError extends DisseqtError {
   constructor(message: string, options?: ErrorOptions) {
     super(message, options);
@@ -24,11 +20,7 @@ export class AuthMissingError extends DisseqtAuthError {
   }
 }
 
-/**
- * Config file is readable but its permissions are wider than 0o600.
- * Refuse to read — a world-readable token is a security incident, not a
- * warning.
- */
+/** Config file is wider than 0o600; reading it is refused, not warned about. */
 export class AuthConfigPermissionError extends DisseqtAuthError {
   readonly path: string;
   readonly mode: number;

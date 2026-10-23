@@ -3,11 +3,7 @@ import { ResourceBase } from './base.js';
 
 const PACKS = '/api/v1/sdk/prompt-packs';
 
-/**
- * Prompt-pack runs.
- * Create is pack-scoped (`/sdk/prompt-packs/:id/runs`);
- * everything else keys off `run_id` under `/sdk/prompt-packs/runs/:run_id`.
- */
+/** Prompt-pack runs: create under `/sdk/prompt-packs/:id/runs`, the rest under `/runs/:run_id`. */
 export class RunsClient extends ResourceBase {
   create(packId: string, payload: JsonValue): Promise<JsonObject> {
     return this._request('POST', `${PACKS}/${packId}/runs`, { json: payload });

@@ -30,12 +30,8 @@ export class PacksClient extends ResourceBase {
     return this._request('GET', `${ROOT}/${id}`);
   }
 
-  /**
-   * `severity`, `interaction_mode` and `task_type` are ignored server-side.
-   * createPromptPack blanks all three (after a warning log) and re-derives
-   * them by aggregating the pack's prompts, so they never round-trip — set
-   * them on the prompts instead of the pack.
-   */
+  /** Pack-level `severity` / `interaction_mode` / `task_type` are ignored: the server
+   *  re-derives them from the prompts, so set them there. */
   create(payload: JsonValue): Promise<JsonObject> {
     return this._request('POST', ROOT, { json: payload });
   }
@@ -57,11 +53,7 @@ export class PacksClient extends ResourceBase {
     );
   }
 
-  /**
-   * PATCH /:id/publish. `sharing_scope` is a **required** body field
-   * (publishPromptPack binds it); omitting the body is a 400 `EOF`.
-   * Non-admin packs are additionally rejected server-side for `PUBLIC`.
-   */
+  /** PATCH /:id/publish with the required `sharing_scope` (`PUBLIC` is admin-only server-side). */
   publish(id: string, sharingScope: PackSharingScope = 'PRIVATE'): Promise<JsonObject> {
     if (!PACK_SHARING_SCOPES.includes(sharingScope)) {
       throw new DisseqtError(

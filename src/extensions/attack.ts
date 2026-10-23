@@ -1,9 +1,5 @@
-// `BaseAttack` — root of the client-side attack extension hierarchy.
-// Mirrors Python's `disseqt_sdk.extensions.BaseAttack` (Phase 5a).
-//
-// Subclasses either override `enhance()` for client-side prompt mutation
-// or leave it as passthrough and let the SDK dispatch to server-side
-// attack techniques.
+// Root of the client-side attack hierarchy (Python `BaseAttack`). Override `enhance()` to
+// mutate prompts locally; the passthrough default leaves it to server-side techniques.
 
 export type AttackMetadata = Record<string, unknown>;
 

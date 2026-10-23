@@ -25,13 +25,7 @@ export class TargetsClient extends ResourceBase {
     return this._request('DELETE', `${ROOT}/${id}`);
   }
 
-  /**
-   * Test a saved integration by id.
-   *
-   * Backend route: POST /api/v1/llm/app-integrations/:id/test-connection
-   * (dataset-backend api/server.go:811). The bare /:id/test suffix is not
-   * registered and 404s.
-   */
+  /** Test a saved integration: POST /:id/test-connection (there is no /:id/test). */
   test(id: string, payload?: JsonValue): Promise<JsonObject> {
     return this._request(
       'POST',
@@ -40,11 +34,7 @@ export class TargetsClient extends ResourceBase {
     );
   }
 
-  /**
-   * Test connection without saving (dry run). Python-SDK parity: this is
-   * `TargetsResource.probe()`. Names diverge historically; a rename would
-   * be a breaking API change with no correctness upside so kept as-is.
-   */
+  /** Dry-run connection test without saving (Python `TargetsResource.probe()`). */
   testConnection(payload: JsonValue): Promise<JsonObject> {
     return this._request('POST', `${ROOT}/test-connection`, { json: payload });
   }

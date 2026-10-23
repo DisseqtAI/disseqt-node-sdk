@@ -1,11 +1,8 @@
 import { AuthMissingError } from './errors.js';
 import { loadSync } from './tokenStore.js';
 
-/**
- * Resolve credentials for the sync client constructors. Precedence matches the
- * Python SDK: constructor args > `DISSEQT_*` env vars > `~/.disseqt/config.json`.
- * Only the API key is required; the project id is derived server-side from it.
- */
+/** Credential precedence (Python parity): args > `DISSEQT_*` env > `~/.disseqt/config.json`.
+ *  Only the API key is required; the server derives the project from it. */
 export interface AuthOverrides {
   apiKey?: string;
   projectId?: string;

@@ -1,8 +1,4 @@
-/**
- * Strip trailing '/' characters without a backtracking regex.
- * CodeQL flags `/\/+$/` on library-input strings as polynomial ReDoS
- * (js/polynomial-redos); a plain loop has no backtracking risk.
- */
+/** Strip trailing '/' with a loop: CodeQL flags `/\/+$/` as polynomial ReDoS. */
 export function stripTrailingSlashes(input: string): string {
   let end = input.length;
   while (end > 0 && input.charCodeAt(end - 1) === 47) end--;

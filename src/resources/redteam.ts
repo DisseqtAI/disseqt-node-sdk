@@ -1,13 +1,8 @@
 import type { JsonObject, JsonValue, QueryParams } from '../http/types.js';
 import { ResourceBase } from './base.js';
 
-// Mirrors the Python SDK's `disseqt redteam` surface (src/disseqt_sdk/cli/redteam.py).
-// Endpoints span two backends fronted by the same host:
-//   /api/v1/testing/*         — single-turn sessions/runs/validation
-//   /api/v1/mr-jailbreak/*    — multi-turn (batch-automate + agents)
-//   /api/v1/jailbreak/*       — analytics
-//   /api/v1/testing/bot/*     — bot helpers (recommend/parse-curl/test-connection)
-// Every method here maps 1:1 to a Python `_http.request` call — no invention.
+// Python `disseqt redteam` parity: /testing (single-turn), /mr-jailbreak (multi-turn),
+// /jailbreak (analytics), /testing/bot (helpers).
 
 const TESTING = '/api/v1/testing';
 const MR = '/api/v1/mr-jailbreak';
@@ -110,9 +105,7 @@ export type RecommendKind = 'packs' | 'attacks' | 'validators';
 export type ReportFormat = 'json' | 'csv' | 'markdown';
 
 export class RedteamClient extends ResourceBase {
-  // ---------------------------------------------------------------------
-  // Catalog
-  // ---------------------------------------------------------------------
+  // --- Catalog ---
 
   /** GET /api/v1/testing/attack-techniques — array response. */
   listSingleTurnTechniques(): Promise<unknown> {
@@ -124,24 +117,15 @@ export class RedteamClient extends ResourceBase {
     return this._requestAny('GET', `${MR}/techniques`);
   }
 
-  /**
-   * GET /api/v1/mr-jailbreak/agents — array response. The backend binds
-   * `page_id` (min 1) and kebab-case `page-size` (5..100) as required form
-   * params (jailbreak_agents_handlers.go ListJailbreakAgentsRequest); defaults
-   * fetch the first full page. `risk_level` / `attack_type` are optional filters.
-   */
+  /** GET /mr-jailbreak/agents; `page_id` and kebab-case `page-size` (5..100) are required
+   *  (ListJailbreakAgentsRequest), so default to the first full page. */
   listAgents(params?: QueryParams): Promise<unknown> {
     return this._requestAny('GET', `${MR}/agents`, {
       params: { page_id: 1, 'page-size': 100, ...params },
     });
   }
 
-  /**
-   * `list-attacks --kind {single,multi,agents,all}` — server returns each
-   * catalog independently; combined here to match Python's JSON shape.
-   * Keys are emitted alphabetically so the byte output matches Python's
-   * `json.dumps(..., sort_keys=True)` for parity diffs.
-   */
+  /** `list-attacks --kind`: catalogs combined with alphabetical keys (Python `sort_keys=True`). */
   async listAttacks(kind: AttackKind = 'all'): Promise<RedteamAttackCatalog> {
     const agents =
       kind === 'agents' || kind === 'all' ? ((await this.listAgents()) as JsonValue) : undefined;
@@ -160,9 +144,7 @@ export class RedteamClient extends ResourceBase {
     return out;
   }
 
-  // ---------------------------------------------------------------------
-  // Sessions + runs (single-turn attack path)
-  // ---------------------------------------------------------------------
+  // --- Sessions + runs (single-turn attack path) ---
 
   /** POST /api/v1/testing/sessions */
   createSession(payload: JsonValue): Promise<JsonObject> {
@@ -199,9 +181,7 @@ export class RedteamClient extends ResourceBase {
     return this._request('POST', `${TESTING}/runs/${runId}/cancel`);
   }
 
-  // ---------------------------------------------------------------------
-  // Multi-turn (mr-jailbreak)
-  // ---------------------------------------------------------------------
+  // --- Multi-turn (mr-jailbreak) ---
 
   /** POST /api/v1/mr-jailbreak/batch-automate — one-shot multi-turn attack. */
   batchAutomate(payload: JsonValue): Promise<JsonObject> {
@@ -218,9 +198,7 @@ export class RedteamClient extends ResourceBase {
     return this._requestAny('GET', `${MR}/jobs/${jobId}/interactions`);
   }
 
-  // ---------------------------------------------------------------------
-  // Validation
-  // ---------------------------------------------------------------------
+  // --- Validation ---
 
   /** POST /api/v1/testing/validate — one-shot single-turn validator run. */
   async validate(payload: RedteamValidateRequest): Promise<RedteamValidateResponse> {
@@ -230,38 +208,26 @@ export class RedteamClient extends ResourceBase {
     return out as unknown as RedteamValidateResponse;
   }
 
-  // ---------------------------------------------------------------------
-  // Reports
-  // ---------------------------------------------------------------------
+  // --- Reports ---
 
   /** GET /api/v1/testing/sessions/{id}/report/csv — raw CSV text passthrough. */
   sessionReportCsv(sessionId: string): Promise<{ status: number; headers: Headers; text: string }> {
     return this._requestRaw('GET', `${TESTING}/sessions/${sessionId}/report/csv`);
   }
 
-  // ---------------------------------------------------------------------
-  // Analytics
-  // ---------------------------------------------------------------------
+  // --- Analytics ---
 
   /** GET /api/v1/jailbreak/analytics/summary */
   analyticsSummary(): Promise<JsonObject> {
     return this._request('GET', `${JB}/analytics/summary`);
   }
 
-  /**
-   * GET /api/v1/jailbreak/prompts-stats.
-   *
-   * Backend registers /prompts-stats at jailbreak_routes.go:57. The
-   * /analytics/ prefix applies only to /analytics/summary
-   * (jailbreak_routes.go:64) — /analytics/prompts-stats is a 404.
-   */
+  /** GET /api/v1/jailbreak/prompts-stats (no /analytics/ prefix, unlike summary). */
   analyticsPromptsStats(): Promise<JsonObject> {
     return this._request('GET', `${JB}/prompts-stats`);
   }
 
-  // ---------------------------------------------------------------------
-  // Bot helpers
-  // ---------------------------------------------------------------------
+  // --- Bot helpers ---
 
   /** POST /api/v1/testing/bot/recommend-{kind} */
   recommend(kind: RecommendKind, payload: JsonValue): Promise<JsonObject> {

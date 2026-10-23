@@ -121,11 +121,8 @@ export function newDispatchStats(): DispatchStats {
 const isUnrecoverable = (error: unknown): boolean =>
   error instanceof DisseqtHttpError && [401, 402, 403].includes(error.statusCode);
 
-/**
- * The judge route reports failures INSIDE an HTTP 200:
- * `{data:{...zeros}, status:{code:"402", message:"insufficient credits"}}`.
- * Surface those as the same typed error the HTTP path throws.
- */
+/** The judge route reports failures inside a 200 (`status:{code:"402",...}`);
+ *  surface them as the same typed error as the HTTP path. */
 export function raiseForWireStatus(envelope: unknown): void {
   if (envelope === null || typeof envelope !== 'object') return;
   const status = (envelope as Record<string, unknown>)['status'];
@@ -295,12 +292,8 @@ export function extractFindingsList(envelope: unknown): Record<string, unknown>[
   return [];
 }
 
-/**
- * disseqt-go compat envelope from the judge route:
- * `{data:{metric_name, actual_value, metric_labels, threshold, threshold_score, others}}`.
- * One finding per chunk in the batch when `actual_value` reaches
- * `threshold_score`; severity from a severity-word label, else the score.
- */
+/** Judge envelope `{data:{metric_name, actual_value, metric_labels, threshold_score, ...}}` →
+ *  one finding per chunk when `actual_value` reaches `threshold_score`. */
 export function findingsFromMetric(
   envelope: unknown,
   validator: string,
@@ -359,12 +352,8 @@ export interface DispatchOptions {
   scope?: ScanScope;
 }
 
-/**
- * POST batches to each validator and yield the parsed findings.
- * Batch-level failures are logged to stderr and skipped so one flaky
- * validator doesn't kill the whole scan — except 401/402/403, which would
- * fail every remaining request identically, so dispatch stops at the first one.
- */
+/** POST batches to each validator; a failed batch is logged and skipped,
+ *  except 401/402/403, which stop dispatch (every later request would fail too). */
 export async function* dispatch(
   chunks: AsyncIterable<CodeChunk> | Iterable<CodeChunk>,
   rawValidators: readonly string[],
