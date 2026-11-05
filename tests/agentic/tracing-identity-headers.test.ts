@@ -49,7 +49,7 @@ describe('agentic tracing identity headers (N2)', () => {
     expect(body.resource.attributes['project.id']).toBe('proj-456');
   });
 
-  it('sends X-Application-Id only when configured (optional, compat with existing 0.3.0 callers)', async () => {
+  it('sends X-Application-Id when the transport has one', async () => {
     const fetcher = vi.fn<FetchLike>().mockResolvedValue(new Response('{}', { status: 200 }));
     const transport = new AgenticHTTPTransport({
       endpoint: 'https://api.example.test/traces',
@@ -86,24 +86,15 @@ describe('agentic tracing identity headers (N2)', () => {
     await client.shutdown();
   });
 
-  it('an existing 0.3.0-style caller who never sets applicationId keeps working unchanged', async () => {
-    const fetcher = vi.fn<FetchLike>().mockResolvedValue(new Response('{}', { status: 200 }));
-    const client = new DisseqtAgenticClient({
-      apiKey: 'FAKE-KEY-FOR-TEST',
-      projectId: 'proj-456',
-      serviceName: 'svc',
-      endpoint: 'https://api.example.test/traces',
-      fetch: fetcher,
-    });
-    expect(client.applicationId).toBeNull();
-
-    client.sendTrace({ toEnrichedSpans: () => [makeSpan()] } as never);
-    await client.flush();
-
-    const [, init] = fetcher.mock.calls[0] as [unknown, RequestInit];
-    const headers = init.headers as Record<string, string>;
-    expect(headers['X-Application-Id']).toBeUndefined();
-    expect(headers['X-Api-Key']).toBe('FAKE-KEY-FOR-TEST');
-    await client.shutdown();
+  it('DisseqtAgenticClient requires applicationId, matching the Python SDK', () => {
+    expect(
+      () =>
+        new DisseqtAgenticClient({
+          apiKey: 'FAKE-KEY-FOR-TEST',
+          projectId: 'proj-456',
+          serviceName: 'svc',
+          endpoint: 'https://api.example.test/traces',
+        }),
+    ).toThrow(/application_id is required and cannot be empty\. See https:\/\/docs\.disseqt\.ai/);
   });
 });

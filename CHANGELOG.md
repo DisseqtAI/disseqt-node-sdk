@@ -19,13 +19,14 @@
   reading the body. Body `resource.attributes` are unchanged for
   compatibility with older backend versions.
 
-### Added
+### Changed
 
-- **`DisseqtAgenticClient` accepts an optional `applicationId` /
-  `application_id`.** When set, it's sent as `X-Application-Id` on every
-  trace upload. Optional and off by default — existing callers are
-  unaffected; some environments will require this in the future, ask your
-  Disseqt contact if you're unsure whether yours does.
+- **Breaking: `DisseqtAgenticClient` now requires `applicationId` /
+  `application_id`**, matching the Python SDK. It is sent as
+  `X-Application-Id` on every trace upload so traces are tied to an
+  application. The constructor throws a `ValueError` when it is missing
+  or empty. Pass the application's UUID from the Disseqt dashboard's
+  Applications page.
 
 ### Known limitation
 

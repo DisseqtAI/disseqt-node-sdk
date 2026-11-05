@@ -9,6 +9,7 @@ import {
 const client = new DisseqtAgenticClient({
   apiKey: 'your-api-key',
   projectId: 'your-project-id',
+  applicationId: 'your-application-id',
   serviceName: 'assistant-service',
 });
 

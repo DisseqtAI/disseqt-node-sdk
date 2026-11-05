@@ -115,9 +115,8 @@ export class AgenticHTTPTransport {
     if (typeof projectId === 'string' && projectId.length > 0) {
       headers['X-Project-Id'] = projectId;
     }
-    // Optional: existing 0.3.0 callers never set this and must keep working
-    // unchanged. Production's gateway does not require it today (default
-    // require_application_verify=false); only sent when the caller opts in.
+    // DisseqtAgenticClient always sets this; a transport built directly
+    // without one sends no header.
     if (this.applicationId) {
       headers['X-Application-Id'] = this.applicationId;
     }

@@ -25,6 +25,7 @@ const createClient = () =>
     apiKey: 'key',
     projectId: 'project',
     serviceName: 'svc',
+    applicationId: 'app',
     endpoint: 'https://api.example.test/traces',
     flushIntervalMs: 60_000,
     fetch: vi.fn<FetchLike>().mockResolvedValue(new Response('{}', { status: 200 })),

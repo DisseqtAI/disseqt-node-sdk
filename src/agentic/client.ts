@@ -35,7 +35,7 @@ export class DisseqtAgenticClient {
 
   readonly apiKey: string;
   readonly projectId: string;
-  readonly applicationId: string | null;
+  readonly applicationId: string;
   readonly serviceName: string;
   readonly serviceVersion: string;
   readonly environment: string;
@@ -56,16 +56,19 @@ export class DisseqtAgenticClient {
     assertNonEmpty('service_name', serviceName);
     assertNonEmpty('endpoint', endpoint);
     assertNonEmpty('environment', environment);
+    // Required, matching the Python SDK: without X-Application-Id a trace
+    // cannot be tied to an application, and Kong's traces-auth plugin
+    // rejects it once require_application_verify is on.
+    assertNonEmpty(
+      'application_id',
+      applicationId,
+      'See https://docs.disseqt.ai/docs/disseqt-sdk/agentic-observability/applications-registry ' +
+        'for how to obtain one.',
+    );
 
     this.apiKey = apiKey;
     this.projectId = projectId;
-    // Optional, unlike apiKey/projectId above: existing callers upgrading
-    // from 0.2.x/0.3.0 never set this and must keep working unchanged.
-    // Production's gateway does not require it today (default
-    // require_application_verify=false); staging does. Send it only when
-    // the caller opts in -- see AgenticHTTPTransport.buildHeaders.
-    this.applicationId =
-      applicationId !== undefined && applicationId.trim().length > 0 ? applicationId : null;
+    this.applicationId = applicationId;
     this.serviceName = serviceName;
     this.serviceVersion = config.serviceVersion ?? config.service_version ?? '1.0.0';
     this.environment = environment;
@@ -111,9 +114,14 @@ function secondsToMilliseconds(seconds: number): number {
   return seconds * 1_000;
 }
 
-function assertNonEmpty(name: string, value: string | undefined): asserts value is string {
+function assertNonEmpty(
+  name: string,
+  value: string | undefined,
+  hint?: string,
+): asserts value is string {
   if (value === undefined || value.trim().length === 0) {
-    throw new ValueError(`${name} is required and cannot be empty`);
+    const message = `${name} is required and cannot be empty`;
+    throw new ValueError(hint ? `${message}. ${hint}` : message);
   }
 }
 
