@@ -108,8 +108,13 @@ describe('AgenticHTTPTransport', () => {
     expect(fetcher.mock.calls[1]?.[1]).toEqual(
       expect.objectContaining({
         method: 'POST',
+        // N2: X-Api-Key/X-Project-Id are now sent as headers too (see
+        // tests/agentic/tracing-identity-headers.test.ts for the dedicated
+        // coverage) -- this span carries project_id: 'project'.
         headers: {
           'Content-Type': 'application/json',
+          'X-Api-Key': 'api-key',
+          'X-Project-Id': 'project',
         },
       }),
     );
@@ -190,6 +195,7 @@ describe('DisseqtAgenticClient', () => {
           apiKey: '',
           projectId: 'project',
           serviceName: 'svc',
+          applicationId: 'app',
         }),
     ).toThrow('api_key is required and cannot be empty');
     expect(
@@ -198,8 +204,23 @@ describe('DisseqtAgenticClient', () => {
           apiKey: 'key',
           projectId: 'project',
           serviceName: '',
+          applicationId: 'app',
         }),
     ).toThrow('service_name is required and cannot be empty');
+    expect(
+      () => new DisseqtAgenticClient({ apiKey: 'key', projectId: 'project', serviceName: 'svc' }),
+    ).toThrow('application_id is required and cannot be empty');
+    for (const applicationId of ['', '   ']) {
+      expect(
+        () =>
+          new DisseqtAgenticClient({
+            apiKey: 'key',
+            projectId: 'project',
+            serviceName: 'svc',
+            applicationId,
+          }),
+      ).toThrow('application_id is required and cannot be empty');
+    }
   });
 
   it('sends trace spans to the buffer and flushes them through transport', async () => {
@@ -208,6 +229,7 @@ describe('DisseqtAgenticClient', () => {
       apiKey: 'key',
       projectId: 'project',
       serviceName: 'svc',
+      applicationId: 'app',
       endpoint: 'https://api.example.test/traces',
       maxBatchSize: 100,
       flushIntervalMs: 60_000,

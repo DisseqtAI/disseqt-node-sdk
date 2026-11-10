@@ -213,6 +213,7 @@ import {
 const tracing = new DisseqtAgenticClient({
   projectId: 'your-project-id',
   apiKey: 'your-api-key',
+  applicationId: 'your-application-id',
   serviceName: 'assistant-service',
 });
 
@@ -319,6 +320,7 @@ const client = new Client({
 const tracing = new DisseqtAgenticClient({
   projectId: 'your-project-id', // required
   apiKey: 'your-api-key', // required
+  applicationId: 'your-application-id', // required; sent as X-Application-Id
   serviceName: 'my-service', // required; shown on dashboards
   serviceVersion: '1.0.0', // optional
   environment: 'production', // optional
