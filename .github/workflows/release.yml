@@ -2,13 +2,44 @@ name: Release
 
 # One-click release, protected-branch edition. main requires reviewed PRs
 # (GH006, enforced for admins), so this workflow cannot push the release
-# commit directly. Instead it prepares everything on a release/vX.Y.Z
+# commit directly. Instead it prepares everything on a chore/release-vX.Y.Z
 # branch — bump package.json + src/version.ts in lockstep, stamp the
 # CHANGELOG, gate on typecheck/lint/tests/build — and opens a "Release
 # vX.Y.Z" PR with the release notes as its body. Approving and merging
 # that PR is the human step; release-finalize.yml then tags, creates the
 # GitHub release, and dispatches the npm publish automatically. After npm,
 # the backend advertises the new version on its own via registry polling.
+#
+# Branch prefix is chore/, not release/: org ruleset "security-enforcement"
+# covers refs/heads/release/* (required_status_checks + pull_request review)
+# on this repo, and this workflow's own push to a release/* branch is
+# rejected with GH013 before a PR can ever open. chore/* isn't covered by
+# any ruleset, and main itself stays fully protected either way — the
+# release PR still needs one approval and every required check.
+#
+# IMPORTANT — the release PR's required checks (lint/test/trivy, enforced by
+# the same org ruleset on main) do NOT run automatically on this PR, and
+# dispatching ci.yml manually would not fix it either:
+#   - The branch push and `gh pr create` below both run as the default
+#     GITHUB_TOKEN. GitHub Actions never starts a new workflow run from an
+#     event caused by GITHUB_TOKEN (push, pull_request opened, etc.) —
+#     except workflow_dispatch/repository_dispatch — specifically to avoid
+#     recursive runs. So ci.yml's `push`/`pull_request` triggers never fire
+#     for this branch or this PR on their own.
+#   - Adding workflow_dispatch to ci.yml and dispatching it against this
+#     branch would NOT help either: per GitHub's own docs ("Troubleshooting
+#     required status checks"), "if a workflow is triggered by
+#     workflow_dispatch on a pull request's head branch, checks reported by
+#     its jobs do not appear in the pull request's checks section. Even if
+#     the checks pass for the head commit, they do not satisfy a required
+#     status check in a branch ruleset." This repo's required checks are
+#     enforced purely by a ruleset (classic protection has none), so a
+#     dispatched run would complete green and still never satisfy the gate.
+#   - The one action that DOES work: a human closing and reopening the
+#     release PR. That fires a real, non-GITHUB_TOKEN `pull_request:
+#     reopened` event, which ci.yml's bare `pull_request:` trigger catches
+#     normally, producing real check-runs against the PR's head commit that
+#     the ruleset does accept. Do this once per release before approving.
 
 on:
   workflow_dispatch:
@@ -65,7 +96,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          BRANCH="release/v${{ steps.prep.outputs.version }}"
+          BRANCH="chore/release-v${{ steps.prep.outputs.version }}"
           git checkout -b "$BRANCH"
           git add package.json package-lock.json CHANGELOG.md
           if [ -f src/version.ts ]; then git add src/version.ts; fi
@@ -78,7 +109,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          BRANCH="release/v${{ steps.prep.outputs.version }}"
+          BRANCH="chore/release-v${{ steps.prep.outputs.version }}"
           if gh pr create --base main --head "$BRANCH" \
               --title "Release v${{ steps.prep.outputs.version }}" \
               --body-file release_notes.md; then
@@ -95,6 +126,7 @@ jobs:
           {
             echo "## Release v${{ steps.prep.outputs.version }} prepared"
             echo ""
-            echo "1. **Approve and merge** the \`Release v${{ steps.prep.outputs.version }}\` PR (main requires review)."
-            echo "2. On merge, \`release-finalize.yml\` tags \`v${{ steps.prep.outputs.version }}\`, creates the GitHub release, and dispatches the npm publish — no further action."
+            echo "1. **Close and reopen** the \`Release v${{ steps.prep.outputs.version }}\` PR first — this PR was opened by GITHUB_TOKEN, so its required checks (lint/test/trivy) never ran automatically; closing and reopening fires a real check run against the same head commit."
+            echo "2. **Approve and merge** the PR once those checks are green (main requires review)."
+            echo "3. On merge, \`release-finalize.yml\` tags \`v${{ steps.prep.outputs.version }}\`, creates the GitHub release, and dispatches the npm publish — no further action."
           } >> "$GITHUB_STEP_SUMMARY"
